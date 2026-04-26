@@ -56,7 +56,7 @@ def upload_to_firebase(candidates):
         print(f"❌ Firebase 處理過程中發生異常: {str(e)}")
 
 # --- 在你的程式碼最後面修改呼叫邏輯 ---
-       if __name__ == "__main__":
+if __name__ == "__main__":
     # 執行你原本的四層過濾邏輯
        final_list = run_full_strategy()
     
