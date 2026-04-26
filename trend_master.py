@@ -10,7 +10,7 @@ def run_full_strategy():
     
     if token:
         # 修正點：將 api.login 改為 api.login_by_token
-        api.login_by_token(token=token) 
+        api.login_by_token(token) 
     
     print(f"🚀 trend_master (執行時間: {datetime.now()}) [cite: 58]")
 
