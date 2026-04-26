@@ -21,7 +21,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install FinMind pandas tqdm
+          pip install FinMind pandas tqdm firebase-admin
+
+      - name: Run Strategy
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }} # 映射新 Secret
+        run: python trend_master.py
 
       # 偵錯步驟：印出目前資料夾有哪些檔案
       - name: Check files
