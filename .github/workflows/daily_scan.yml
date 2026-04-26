@@ -30,4 +30,4 @@ jobs:
       - name: Run Strategy
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-        run: python 全能趨勢過濾網.py
+        run: python trend_master.py
