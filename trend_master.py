@@ -56,12 +56,12 @@ def upload_to_firebase(candidates):
         print(f"❌ Firebase 處理過程中發生異常: {str(e)}")
 
 # --- 在你的程式碼最後面修改呼叫邏輯 ---
-    if __name__ == "__main__":
+       if __name__ == "__main__":
     # 執行你原本的四層過濾邏輯
-    final_list = run_full_strategy()
+       final_list = run_full_strategy()
     
     # 執行 Firebase 同步
-    upload_to_firebase(final_list)
+       upload_to_firebase(final_list)
     # 1. 導入你提供的成交量前 100 名單 (已轉換為 FinMind 格式)
     # 過濾掉權證與非個股標的，專注於個股篩選
     raw_list = [
