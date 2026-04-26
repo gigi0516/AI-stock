@@ -2,7 +2,6 @@ import os
 import pandas as pd
 from FinMind.data import DataLoader
 from datetime import datetime, timedelta
-
 def run_full_strategy():
     token = os.environ.get('FINMIND_TOKEN')
     api = DataLoader()
@@ -57,7 +56,7 @@ def upload_to_firebase(candidates):
         print(f"❌ Firebase 處理過程中發生異常: {str(e)}")
 
 # --- 在你的程式碼最後面修改呼叫邏輯 ---
-if __name__ == "__main__":
+    if __name__ == "__main__":
     # 執行你原本的四層過濾邏輯
     final_list = run_full_strategy()
     
@@ -108,7 +107,7 @@ if __name__ == "__main__":
         except:
             continue
             
-    return final_candidates
+        return final_candidates
 
 if __name__ == "__main__":
     candidates = run_full_strategy()
