@@ -7,7 +7,62 @@ def run_full_strategy():
     token = os.environ.get('FINMIND_TOKEN')
     api = DataLoader()
     if token: api.login_by_token(token)
+    import os
+import json
+import firebase_admin
+from firebase_admin import credentials, db
+from datetime import datetime
+
+def upload_to_firebase(candidates):
+    """
+    將選股結果同步至 Firebase Realtime Database
+    """
+    # 1. 從 GitHub Secrets 獲取 JSON 字串
+    fb_config = os.environ.get('FIREBASE_CONFIG')
     
+    if not fb_config:
+        print("❌ 錯誤：找不到環境變數 FIREBASE_CONFIG，請檢查 GitHub Secrets 設定。")
+        return
+
+    try:
+        # 2. 解析 JSON 配置並初始化 Firebase
+        # 使用 json.loads 將字串轉回字典格式
+        cred_json = json.loads(fb_config)
+        cred = credentials.Certificate(cred_json)
+        
+        # 避免在 GitHub Actions 重複執行時重複初始化
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': f"https://{cred_json['project_id']}-default-rtdb.firebaseio.com/"
+            })
+        
+        # 3. 準備寫入的資料內容
+        # 即使 candidates 是空的 [] 也要寫入，這樣 App 才知道今天已經更新過了
+        push_data = {
+            'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'candidates': candidates,
+            'strategy_name': 'The Trend-Master',
+            'status': 'Success' if candidates else 'No match today'
+        }
+
+        # 4. 寫入到路徑 stock_alerts/trend_master
+        # 使用 .set() 會直接覆蓋該節點，確保資料是最新的
+        ref = db.reference('stock_alerts/trend_master')
+        ref.set(push_data)
+        
+        print(f"📢 Firebase 同步成功！時間：{push_data['last_update']}")
+        print(f"📦 傳送標的：{candidates}")
+
+    except Exception as e:
+        print(f"❌ Firebase 處理過程中發生異常: {str(e)}")
+
+# --- 在你的程式碼最後面修改呼叫邏輯 ---
+if __name__ == "__main__":
+    # 執行你原本的四層過濾邏輯
+    final_list = run_full_strategy()
+    
+    # 執行 Firebase 同步
+    upload_to_firebase(final_list)
     # 1. 導入你提供的成交量前 100 名單 (已轉換為 FinMind 格式)
     # 過濾掉權證與非個股標的，專注於個股篩選
     raw_list = [
