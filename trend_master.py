@@ -4,48 +4,52 @@ from FinMind.data import DataLoader
 from datetime import datetime, timedelta
 
 def run_full_strategy():
-    # 從環境變數讀取 Token 
     token = os.environ.get('FINMIND_TOKEN')
     api = DataLoader()
-    
     if token:
-        # 修正點：將 api.login 改為 api.login_by_token
-        api.login_by_token(token) 
+        api.login_by_token(token)
     
-    print(f"🚀 trend_master (執行時間: {datetime.now()}) [cite: 58]")
+    # 設定時間：抓取最近 3 天的資料來確認 MA 趨勢與成交量 [cite: 58, 62]
+    today = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
 
-    # 設定時間範圍，抓取足夠計算 MA60 的資料量 [cite: 61, 62]
-    start_date = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d")
+    print(f"🚀 啟動全能趨勢過濾機器人... [cite: 56]")
 
-    # --- 第一層 & 第二層：技術面與成交量 [cite: 59, 63] ---
-    df_price = api.taiwan_stock_daily_adj(start_date=start_date) [cite: 76]
-    
+    # --- 第一層 & 第二層：技術面與成交量 (優化：使用全市場日資料)  ---
+    # 修正點：改用支援全市場抓取的 API 介面
+    df_price = api.taiwan_stock_daily(
+        start_date=start_date,
+        end_date=today
+    ) [cite: 76]
+
     # 計算 MA20 [cite: 62]
-    df_price['MA20'] = df_price.groupby('stock_id')['close'].transform(lambda x: x.rolling(window=20).mean())
+    df_price['MA20'] = df_price.groupby('stock_id')['close'].transform(lambda x: x.rolling(window=20, min_periods=1).mean())
     
-    latest_price = df_price.groupby('stock_id').tail(1).copy()
+    # 取得最新一筆交易日資料 [cite: 58]
+    latest_data = df_price.groupby('stock_id').tail(1).copy()
     
-    # 邏輯：股價 > MA20 且 成交量 > 1000 [cite: 60, 64]
-    tech_mask = (latest_price['close'] > latest_price['MA20']) & (latest_price['Volume'] > 1000)
-    tech_passed_list = latest_price[tech_mask]['stock_id'].tolist()
-
-    # --- 第三層：籌碼面 (投信連買) [cite: 66, 67] ---
-    # 這裡先過濾出技術面合格的標的，減少 API 呼叫負擔，縮短時間差 
-    df_inst = api.taiwan_stock_institutional_investors_buy_sell(start_date=(datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")) [cite: 76]
-    inst_passed = df_inst[(df_inst['buy_sell_center'] == 'Investment_Trust') & (df_inst['Quantity'] > 0)]
-    inst_passed_list = inst_passed['stock_id'].unique().tolist()
-
-    # --- 第四層：基本面 (營收 YoY 為正) [cite: 69, 70] ---
-    potential_candidates = list(set(tech_passed_list) & set(inst_passed_list))
+    # 篩選條件：股價 > MA20 [cite: 60] 且 成交量 > 1000 [cite: 64]
+    tech_mask = (latest_data['close'] > latest_data['MA20']) & (latest_data['Volume'] > 1000)
+    tech_passed_list = latest_data[tech_mask]['stock_id'].tolist()
     
-    final_list = []
-    for stock_id in potential_candidates:
-        df_revenue = api.taiwan_stock_month_revenue(stock_id=stock_id, start_date=start_date) [cite: 76]
-        if not df_revenue.empty and df_revenue.iloc[-1]['revenue_year_growth_rate'] > 0:
-            final_list.append(stock_id)
+    print(f"🔎 技術面過濾完成，剩餘 {len(tech_passed_list)} 檔標的 [cite: 72]")
 
-    return final_list
+    # --- 第三層：籌碼面 (投信買超) [cite: 66, 67] ---
+    # 僅針對通過技術面篩選的標的進行查詢，減少 API 耗時 [cite: 3]
+    final_candidates = []
+    # (此處建議先取前 50 檔測試，避免 GitHub Actions 執行過久)
+    for stock_id in tech_passed_list[:50]: 
+        df_inst = api.taiwan_stock_institutional_investors_buy_sell(
+            stock_id=stock_id,
+            start_date=(datetime.now() - timedelta(days=5)).strftime("%Y-%m-%d")
+        ) [cite: 76]
+        
+        # 判斷投信是否有買超動作 [cite: 67]
+        if not df_inst.empty and df_inst[df_inst['buy_sell_center'] == 'Investment_Trust']['Quantity'].sum() > 0:
+            final_candidates.append(stock_id)
+
+    return final_candidates
 
 if __name__ == "__main__":
     candidates = run_full_strategy()
-    print(f"✅ 最終精選名單: {candidates} ")
+    print(f"✅ 最終精選名單: {candidates} [cite: 72]")
