@@ -20,7 +20,8 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install FinMind pandas
+        run: |
+          pip install FinMind pandas tqdm
 
       # 偵錯步驟：印出目前資料夾有哪些檔案
       - name: Check files
