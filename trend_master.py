@@ -34,25 +34,10 @@ def run_full_strategy():
             # 條件：股價 P > MA20 (文件規定)
             if latest['close'] > latest['MA20']:
                 
-                # --- 第三層：籌碼面 (投信連買) ---
-                df_inst = api.taiwan_stock_institutional_investors_buy_sell(
-                    stock_id=stock_id, 
-                    start_date=(datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-                )
-                if not df_inst.empty and df_inst[df_inst['buy_sell_center'] == 'Investment_Trust']['Quantity'].sum() > 0:
-                # 建議將這段邏輯放入你的 trend_master.py 中
-# 放寬條件：只要 (外資 OR 投信) 其中一個買超即可入選
-for stock_id in raw_list:
-    try:
-        # 技術面與成交量 (保留嚴格標準)
-        df_price = api.taiwan_stock_daily(stock_id=stock_id, start_date=start_date)
-        latest = df_price.iloc[-1]
-        
-        if latest['close'] > latest['MA20']:
-            # 籌碼面：放寬為三大法人買賣超合計 > 0
-            df_inst = api.taiwan_stock_institutional_investors_buy_sell(stock_id=stock_id, start_date=start_date)
-            total_buy = df_inst.tail(3)['Quantity'].sum() # 最近三日法人合計買超
-            
+              # 第三層：籌碼面 [cite: 66]
+                # 優化：只要近期法人（外資或投信）有買超即可 [cite: 67]
+                df_inst = api.taiwan_stock_institutional_investors_buy_sell(stock_id=stock_id, start_date=(datetime.now() - timedelta(days=5)).strftime("%Y-%m-%d"))
+                total_buy = df_inst['Quantity'].sum()
             if total_buy > 0:
                 # 基本面：保留營收 YoY > 0 的安全性門檻 [cite: 70]
                 # ... 後續邏輯 ...
