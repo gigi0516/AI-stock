@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas FinMind firebase-admin
+          pip install pandas FinMind firebase-admin tqdm
 
       # --- 這裡開始是關鍵修改區 ---
 
