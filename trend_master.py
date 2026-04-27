@@ -35,45 +35,48 @@ def run_full_strategy():
     if token: api.login_by_token(token)
     
     tw_now = get_taiwan_time()
-    # 擴大範圍到 7 天，確保一定能抓到最近兩個交易日
-    start_date = (tw_now - timedelta(days=7)).strftime("%Y-%m-%d")
+    # 擴大範圍到 10 天，確保跨週末也抓得到資料
+    start_date = (tw_now - timedelta(days=10)).strftime("%Y-%m-%d")
     
-    # 縮短名單先測試這幾檔指標股
+    # 使用你原本的 100 檔名單 (這裡先列出部分測試)
     raw_list = ['2330', '2317', '2454', '2303', '3481', '2409', '2618', '2344']
     final_candidates = []
 
-    print(f"--- 🕵️ 數據偵錯模式 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
+    print(f"--- 🕵️ 數據修正模式 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
 
     for stock_id in raw_list:
         try:
-            # 獲取法人資料
-            df = api.taiwan_stock_institutional_investors_buy_sell(stock_id=stock_id, start_date=start_date)
+            # ✅ 修正後的函式名稱
+            df = api.taiwan_stock_institutional_investors(
+                stock_id=stock_id, 
+                start_date=start_date
+            )
             
             if df.empty:
-                print(f"🔍 {stock_id}: ❌ 無資料")
+                print(f"🔍 {stock_id}: ❌ 無法人資料")
                 continue
 
             # 找出最後一個交易日
             latest_date = df['date'].max()
             df_latest = df[df['date'] == latest_date]
             
-            # 計算外資與投信買賣超 (Quantity 可能為 buy 減 sell)
-            f_buy = df_latest[df_latest['name'] == 'Foreign_Investor']['buy'].sum()
-            f_sell = df_latest[df_latest['name'] == 'Foreign_Investor']['sell'].sum()
-            t_buy = df_latest[df_latest['name'] == 'Investment_Trust']['buy'].sum()
+            # 計算淨買超 (buy - sell)
+            # 這裡計算外資與投信的總和
+            foreign = df_latest[df_latest['name'] == 'Foreign_Investor']
+            trust = df_latest[df_latest['name'] == 'Investment_Trust']
             
-            f_net = f_buy - f_sell
+            f_net = foreign['buy'].sum() - foreign['sell'].sum()
+            t_net = trust['buy'].sum() - trust['sell'].sum()
             
-            # 偵錯印出：讓我們看看數字
-            print(f"🔍 {stock_id} ({latest_date}): 外資淨買 {f_net}, 投信買 {t_buy}")
+            print(f"🔍 {stock_id} ({latest_date}): 外資 {f_net} | 投信 {t_net}")
 
-            # 只要外資買超過 0 或 投信買超過 0
-            if f_net > 0 or t_buy > 0:
-                print(f"   ✅ 符合條件！")
+            # 條件：只要外資或投信其中一個是正的 (買超)
+            if f_net > 0 or t_net > 0:
+                print(f"   ✅ 符合籌碼優選！")
                 final_candidates.append(stock_id)
             
         except Exception as e:
-            print(f"🔍 {stock_id}: ⚠️ 錯誤 {str(e)}")
+            print(f"🔍 {stock_id}: ⚠️ 執行錯誤 {str(e)}")
             continue
             
     return final_candidates
