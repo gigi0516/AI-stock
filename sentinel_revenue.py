@@ -56,14 +56,14 @@ def run_sentinel_strategy():
             yoy = latest['revenue_year_growth_rate']
             mom = latest['revenue_month_growth_rate']
             
-            # 1 號機器人專屬邏輯：YoY > 20% 且 MoM > 0
-            if yoy > 20 and mom > 0:
-                print(f"📈 {stock_id}: 符合營收雙增 (YoY: {yoy}%, MoM: {mom}%)")
+            # --- 修改後的邏輯：只要有漲就好 (雙增即過) ---
+            if yoy > 0 and mom > 0:
+                print(f"🎯 {stock_id}: ✅ 營收雙增 (YoY: {yoy}%, MoM: {mom}%)")
                 final_candidates.append(stock_id)
             else:
-                # 偵錯用：印出不符合的原因
-                print(f"   {stock_id}: 未達標 (YoY: {yoy}%, MoM: {mom}%)")
-        except:
+                print(f"   {stock_id}: ❌ 未達標 (YoY: {yoy}, MoM: {mom})")
+                
+        except Exception as e:
             continue
             
     return final_candidates
