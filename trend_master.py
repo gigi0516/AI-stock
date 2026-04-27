@@ -35,17 +35,14 @@ def upload_to_firebase(candidates):
     except Exception as e:
         print(f"❌ Firebase 處理異常: {e}")
 
-# 3. 定義核心篩選策略
 def run_full_strategy():
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN')
     if token: api.login_by_token(token)
     
     tw_now = get_taiwan_time()
-    # 抓取較長區間以計算 MA20
-    start_date_price = (tw_now - timedelta(days=70)).strftime("%Y-%m-%d")
-    # 籌碼面檢查區間 (近 5 天)
-    start_date_inst = (tw_now - timedelta(days=5)).strftime("%Y-%m-%d")
+    # 設定籌碼觀察期為近 3 天
+    start_date_inst = (tw_now - timedelta(days=3)).strftime("%Y-%m-%d")
     
     raw_list = [
         '00981A', '00631L', '009816', '2344', '00992A', '3481', '00632R', '009819', '2409', '00991A',
@@ -61,35 +58,41 @@ def run_full_strategy():
     ]
     
     final_candidates = []
-    print(f"--- 🕵️ 開始精準篩選 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
+    print(f"--- 🕵️ 開始「籌碼優先」篩選 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
 
     for stock_id in raw_list:
         try:
-            # 第一關：技術面 - 股價在 MA20 之上
-            df = api.taiwan_stock_daily(stock_id=stock_id, start_date=start_date_price)
-            if df.empty or len(df) < 20: continue
+            # 1. 抓取籌碼面資料 (外資與投信)
+            df_inst = api.taiwan_stock_institutional_investors_buy_sell(
+                stock_id=stock_id, 
+                start_date=start_date_inst
+            )
             
-            df['MA20'] = df['close'].rolling(window=20).mean()
-            latest = df.iloc[-1]
-            
-            if latest['close'] > latest['MA20']:
-                # 第二關：籌碼面 - 法人近 5 日合計買超
-                df_inst = api.taiwan_stock_institutional_investors_buy_sell(stock_id=stock_id, start_date=start_date_inst)
-                if not df_inst.empty and df_inst['Quantity'].sum() > 0:
+            if not df_inst.empty:
+                # 分別計算外資與投信的合計買賣超
+                foreign_buy = df_inst[df_inst['name'] == 'Foreign_Investor']['Quantity'].sum()
+                trust_buy = df_inst[df_inst['name'] == 'Investment_Trust']['Quantity'].sum()
+                
+                # 條件：外資 > 0 OR 投信 > 0 (只要一方有買超)
+                if foreign_buy > 0 or trust_buy > 0:
                     
-                    # 第三關：基本面 - 營收年增率為正 (YoY > 0)
-                    # 注意：ETF 或 基金 會在此關卡因為抓不到營收而被過濾，這是正確的
-                    df_rev = api.taiwan_stock_month_revenue(stock_id=stock_id, start_date=(tw_now - timedelta(days=60)).strftime("%Y-%m-%d"))
+                    # 2. 抓取基本面 (營收 YoY)
+                    df_rev = api.taiwan_stock_month_revenue(
+                        stock_id=stock_id, 
+                        start_date=(tw_now - timedelta(days=65)).strftime("%Y-%m-%d")
+                    )
                     
                     if not df_rev.empty and df_rev.iloc[-1]['revenue_year_growth_rate'] > 0:
-                        print(f"🎯 {stock_id}: ✅ 符合條件 (股價 {latest['close']}, 營收 YoY {df_rev.iloc[-1]['revenue_year_growth_rate']}%)")
+                        # 3. 獲取最新股價 (僅作為顯示資訊)
+                        df_price = api.taiwan_stock_daily(stock_id=stock_id, start_date=(tw_now - timedelta(days=5)).strftime("%Y-%m-%d"))
+                        latest_price = df_price.iloc[-1]['close'] if not df_price.empty else "N/A"
+                        
+                        print(f"🎯 {stock_id}: ✅ 法人進場 (外:{foreign_buy}/投:{trust_buy}), 股價 {latest_price}")
                         final_candidates.append(stock_id)
-        except Exception as e:
-            # print(f"⚠️ {stock_id} 處理跳過: {e}") # 偵錯用
+        except:
             continue
             
     return final_candidates
-
 # 4. 主程式執行區
 if __name__ == "__main__":
     result = run_full_strategy()
