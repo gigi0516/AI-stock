@@ -50,12 +50,12 @@ def run_full_strategy():
             # --- 判斷條件 ---
             # 1. 股價 > MA20
             # 2. 法人近三日合計買超 > 0
-            if latest['close'] > latest['MA20']:
+            if latest['close'] > latest['MA20'] * 0.97:
                 df_inst = api.taiwan_stock_institutional_investors_buy_sell(
                     stock_id=stock_id, 
                     start_date=(tw_now - timedelta(days=7)).strftime("%Y-%m-%d")
                 )
-                if not df_inst.empty and df_inst['Quantity'].sum() > 0:
+                if True:
                     df_rev = api.taiwan_stock_month_revenue(
                         stock_id=stock_id, 
                         start_date=(tw_now - timedelta(days=60)).strftime("%Y-%m-%d")
