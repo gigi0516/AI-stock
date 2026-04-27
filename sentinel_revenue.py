@@ -20,39 +20,32 @@ def upload_to_firebase(candidates):
                 'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'
             })
         
-        # 🟢 關鍵：這是機器人一號的專屬頻道
-       ref = db.reference('stock_alerts/bot_1') # 確保這裡是 bot_1
+        # 🔴 這裡是關鍵：強制寫入 bot_1 聊天室路徑
+        ref = db.reference('stock_alerts/bot_1')
         ref.set({
-            'bot_id': 'ROBOT_01',  # 加上身分證
-            'bot_name': '營收雙增哨兵',
+            'bot_id': 'BOT_01_SENTINEL',
+            'bot_name': '機器人一號：營收雙增監控',
             'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-            'candidates': candidates
+            'candidates': candidates,
+            'report_msg': f"今日掃描完成，符合營收雙增標的共 {len(candidates)} 檔。"
         })
-        print(f"📢 機器人一號已將名單回報至頻道 bot_1")
+        print(f"🚀 [機器人一號] 資料已成功推送到 Firebase: bot_1 頻道")
     except Exception as e:
-        print(f"❌ Firebase 錯誤: {e}")
+        print(f"❌ [機器人一號] Firebase 錯誤: {e}")
 
-def run_strategy_v1():
+def run_sentinel_strategy():
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN')
     if token: api.login_by_token(token)
     
     tw_now = get_taiwan_time()
-    start_date = (tw_now - timedelta(days=65)).strftime("%Y-%m-%d")
+    # 營收抓 60 天內資料
+    start_date = (tw_now - timedelta(days=60)).strftime("%Y-%m-%d")
     
-    # 你的 100 檔熱門清單
-    raw_list = [
-        '2344', '3481', '2409', '2303', '2337', '6770', '2408', '2317', '2313', '4958', 
-        '1802', '2367', '2330', '1303', '2002', '3189', '3035', '4927', '6182', '2883', 
-        '2356', '1727', '2312', '3260', '2485', '2884', '2301', '3231', '2886', '2464', 
-        '2890', '2324', '2399', '8028', '2885', '2327', '8027', '2449', '8112', '2892', 
-        '1717', '5483', '5347', '2834', '2481', '3711', '6285', '2618', '4967', '2882', 
-        '8046', '3019', '2812', '3105', '1101', '2355', '1326', '2610', '5880', '8064', 
-        '2388', '2881', '4906', '2454'
-    ]
-    
+    raw_list = ['2330', '2317', '2454', '2303', '3481', '2409', '2618', '2344', '3035', '2337']
     final_candidates = []
-    print(f"--- 🛰️ 機器人一號任務開始 ---")
+
+    print(f"--- 🛰️ 機器人一號 (Sentinel) 營收檢查流程開始 ---")
 
     for stock_id in raw_list:
         try:
@@ -60,19 +53,22 @@ def run_strategy_v1():
             if df_rev.empty: continue
             
             latest = df_rev.iloc[-1]
-            # 邏輯：YoY > 20% 且 MoM > 0
-            if latest['revenue_year_growth_rate'] > 20 and latest['revenue_month_growth_rate'] > 0:
-                print(f"🎯 {stock_id}: 符合雙增條件")
+            yoy = latest['revenue_year_growth_rate']
+            mom = latest['revenue_month_growth_rate']
+            
+            # 1 號機器人專屬邏輯：YoY > 20% 且 MoM > 0
+            if yoy > 20 and mom > 0:
+                print(f"📈 {stock_id}: 符合營收雙增 (YoY: {yoy}%, MoM: {mom}%)")
                 final_candidates.append(stock_id)
+            else:
+                # 偵錯用：印出不符合的原因
+                print(f"   {stock_id}: 未達標 (YoY: {yoy}%, MoM: {mom}%)")
         except:
             continue
+            
     return final_candidates
 
 if __name__ == "__main__":
-    result = run_strategy_v1()
-    upload_to_firebase(result)
-# 4. 主程式執行
-if __name__ == "__main__":
     result = run_sentinel_strategy()
-    print(f"✅ 最終精選名單: {result}")
+    print(f"✅ 機器人一號結算名單: {result}")
     upload_to_firebase(result)
