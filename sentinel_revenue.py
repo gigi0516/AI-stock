@@ -21,12 +21,12 @@ def upload_to_firebase(candidates):
             })
         
         # 🟢 關鍵：這是機器人一號的專屬頻道
-        ref = db.reference('stock_alerts/bot_1')
+       ref = db.reference('stock_alerts/bot_1') # 確保這裡是 bot_1
         ref.set({
-            'bot_name': '機器人一號：營收雙增監控 (The Sentinel)',
+            'bot_id': 'ROBOT_01',  # 加上身分證
+            'bot_name': '營收雙增哨兵',
             'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-            'candidates': candidates,
-            'description': '篩選條件：YoY > 20% 且 MoM > 0'
+            'candidates': candidates
         })
         print(f"📢 機器人一號已將名單回報至頻道 bot_1")
     except Exception as e:
