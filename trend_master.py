@@ -11,9 +11,7 @@ def get_taiwan_time():
 
 def upload_to_firebase(candidates):
     fb_config = os.environ.get('FIREBASE_CONFIG')
-    if not fb_config:
-        print("❌ 錯誤：GitHub Secrets 中找不到 'FIREBASE_CONFIG'")
-        return
+    if not fb_config: return
     try:
         cred_json = json.loads(fb_config)
         if not firebase_admin._apps:
@@ -27,9 +25,9 @@ def upload_to_firebase(candidates):
             'candidates': candidates,
             'status': 'Success'
         })
-        print(f"📢 Firebase 同步成功！名單：{candidates}")
+        print(f"📢 Firebase 同步成功！")
     except Exception as e:
-        print(f"❌ Firebase 處理異常: {e}")
+        print(f"❌ Firebase 錯誤: {e}")
 
 def run_full_strategy():
     api = DataLoader()
@@ -37,41 +35,45 @@ def run_full_strategy():
     if token: api.login_by_token(token)
     
     tw_now = get_taiwan_time()
-    # 這裡稍微拉長一點（5天），確保能抓到「上週四、五」的法人資料
-    start_date_inst = (tw_now - timedelta(days=5)).strftime("%Y-%m-%d")
+    # 擴大範圍到 7 天，確保一定能抓到最近兩個交易日
+    start_date = (tw_now - timedelta(days=7)).strftime("%Y-%m-%d")
     
-    raw_list = [
-        '2344', '3481', '2409', '2303', '2337', '6770', '2408', '2317', '2313', '4958', 
-        '1802', '2367', '2330', '1303', '2002', '3189', '3035', '4927', '6182', '2883', 
-        '2356', '1727', '2312', '3260', '2485', '2884', '2301', '3231', '2886', '2464', 
-        '2890', '2324', '2399', '8028', '2885', '2327', '8027', '2449', '8112', '2892', 
-        '1717', '5483', '5347', '2834', '2481', '3711', '6285', '2618', '4967', '2882', 
-        '8046', '3019', '2812', '3105', '1101', '2355', '1326', '2610', '5880', '8064', 
-        '2388', '2881', '4906', '2454'
-    ]
-    
+    # 縮短名單先測試這幾檔指標股
+    raw_list = ['2330', '2317', '2454', '2303', '3481', '2409', '2618', '2344']
     final_candidates = []
-    print(f"--- 🕵️ 開始「雙日籌碼」篩選 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
+
+    print(f"--- 🕵️ 數據偵錯模式 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
 
     for stock_id in raw_list:
         try:
-            # 1. 抓取籌碼面資料
-            df_inst = api.taiwan_stock_institutional_investors_buy_sell(
-                stock_id=stock_id, 
-                start_date=start_date_inst
-            )
+            # 獲取法人資料
+            df = api.taiwan_stock_institutional_investors_buy_sell(stock_id=stock_id, start_date=start_date)
             
-            if not df_inst.empty:
-                # 計算外資與投信近期的買超總和
-                foreign_buy = df_inst[df_inst['name'] == 'Foreign_Investor']['Quantity'].sum()
-                trust_buy = df_inst[df_inst['name'] == 'Investment_Trust']['Quantity'].sum()
-                
-                # 只要有一方是正的就過
-                if foreign_buy > 0 or trust_buy > 0:
-                    # ✅ 關鍵修正：直接加入名單，跳過複雜的 YoY 判斷（因為假日或 API 延遲可能抓不到 YoY）
-                    print(f"🎯 {stock_id}: ✅ 符合籌碼 (外:{foreign_buy}/投:{trust_buy})")
-                    final_candidates.append(stock_id)
+            if df.empty:
+                print(f"🔍 {stock_id}: ❌ 無資料")
+                continue
+
+            # 找出最後一個交易日
+            latest_date = df['date'].max()
+            df_latest = df[df['date'] == latest_date]
+            
+            # 計算外資與投信買賣超 (Quantity 可能為 buy 減 sell)
+            f_buy = df_latest[df_latest['name'] == 'Foreign_Investor']['buy'].sum()
+            f_sell = df_latest[df_latest['name'] == 'Foreign_Investor']['sell'].sum()
+            t_buy = df_latest[df_latest['name'] == 'Investment_Trust']['buy'].sum()
+            
+            f_net = f_buy - f_sell
+            
+            # 偵錯印出：讓我們看看數字
+            print(f"🔍 {stock_id} ({latest_date}): 外資淨買 {f_net}, 投信買 {t_buy}")
+
+            # 只要外資買超過 0 或 投信買超過 0
+            if f_net > 0 or t_buy > 0:
+                print(f"   ✅ 符合條件！")
+                final_candidates.append(stock_id)
+            
         except Exception as e:
+            print(f"🔍 {stock_id}: ⚠️ 錯誤 {str(e)}")
             continue
             
     return final_candidates
