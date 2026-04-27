@@ -27,7 +27,7 @@ jobs:
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
-        run: python sentinel_bot.py  # 👈 執行 1 號機器人
+        run: python sentinel_revenue.py  # 👈 執行 1 號機器人
 
       - name: Run Robot 4 (Trend Master)
         env:
