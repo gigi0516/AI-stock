@@ -7,65 +7,71 @@ from FinMind.data import DataLoader
 from datetime import datetime, timedelta, timezone
 
 def get_taiwan_time():
-    """獲取精準的台灣時間"""
-    # GitHub 伺服器是 UTC，我們手動加 8 小時轉為台灣時間
-    tw_time = datetime.now(timezone.utc) + timedelta(hours=8)
-    return tw_time
+    return datetime.now(timezone.utc) + timedelta(hours=8)
+
+def upload_to_firebase(candidates):
+    fb_config = os.environ.get('FIREBASE_CONFIG')
+    if not fb_config: 
+        print("❌ 找不到 FIREBASE_CONFIG Secret")
+        return
+    try:
+        cred_json = json.loads(fb_config)
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(cred_json)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': f"https://{cred_json['project_id']}-default-rtdb.firebaseio.com/"
+            })
+        ref = db.reference('stock_alerts/trend_master')
+        ref.set({
+            'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
+            'candidates': candidates,
+            'status': 'Success'
+        })
+        print(f"📢 Firebase 同步成功！名單：{candidates}")
+    except Exception as e:
+        print(f"❌ Firebase 錯誤: {e}")
 
 def run_full_strategy():
-    tw_now = get_taiwan_time()
-    print(f"⏰ 當前台灣時間: {tw_now.strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    token = os.environ.get('FINMIND_TOKEN')
     api = DataLoader()
+    token = os.environ.get('FINMIND_TOKEN')
     if token: api.login_by_token(token)
     
-    # 邏輯優化：設定結束日期為今天，但 start_date 設遠一點
-    # 這樣 FinMind API 會自動回傳「到今天為止最新的所有資料」
-    end_date = tw_now.strftime("%Y-%m-%d")
+    tw_now = get_taiwan_time()
     start_date = (tw_now - timedelta(days=70)).strftime("%Y-%m-%d")
-
-    raw_list = [
-        '3481', '2409', '2303', '2337', '2344', '1802', '2313', '4958', '2408', 
-        '6770', '2367', '2317', '2312', '1717', '3189', '2542', '1303', '2399', 
-        '6176', '2388', '2330', '2436', '2356', '2002', '3231', '1309', '2485', 
-        '8150', '2449', '2324', '4927', '2327', '2316', '2355', '6285', '3711', 
-        '2464', '1301', '2301', '2353', '2618', '3019', '3338', '3045'
-    ]
     
+    # 縮短清單先測試這 5 檔最熱門的
+    raw_list = ['2330', '2317', '2454', '2303', '2618']
     final_candidates = []
-    print(f"🚀 掃描中...")
+
+    print(f"--- 🕵️ 開始偵錯掃描 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
 
     for stock_id in raw_list:
         try:
-            # 獲取歷史資料
-            df_price = api.taiwan_stock_daily(stock_id=stock_id, start_date=start_date, end_date=end_date)
+            print(f"🔍 檢查 {stock_id}...", end=" ")
+            df = api.taiwan_stock_daily(stock_id=stock_id, start_date=start_date)
             
-            # 如果是週末，df_price 的最後一筆會自動停在「上週五」
-            if len(df_price) < 20: continue
+            if df.empty:
+                print("❌ 沒抓到股價資料")
+                continue
             
-            df_price['MA20'] = df_price['close'].rolling(window=20).mean()
-            latest = df_price.iloc[-1]
+            df['MA20'] = df['close'].rolling(window=20).mean()
+            latest = df.iloc[-1]
             
-            # --- 判斷條件 ---
-            # 1. 股價 > MA20
-            # 2. 法人近三日合計買超 > 0
-            if latest['close'] > latest['MA20'] * 0.97:
-                df_inst = api.taiwan_stock_institutional_investors_buy_sell(
-                    stock_id=stock_id, 
-                    start_date=(tw_now - timedelta(days=7)).strftime("%Y-%m-%d")
-                )
-                if True:
-                    df_rev = api.taiwan_stock_month_revenue(
-                        stock_id=stock_id, 
-                        start_date=(tw_now - timedelta(days=60)).strftime("%Y-%m-%d")
-                    )
-                    if not df_rev.empty and df_rev.iloc[-1]['revenue_year_growth_rate'] > 0:
-                        final_candidates.append(stock_id)
-                        print(f"🎯 找到符合標的: {stock_id} (最後交易日: {latest['date']})")
-        except:
+            # --- 極度放寬的測試條件 ---
+            # 只要股價大於 10 元就讓它過（確保測試時有名單）
+            if latest['close'] > 10: 
+                print(f"✅ 符合測試條件 (股價: {latest['close']})")
+                final_candidates.append(stock_id)
+            else:
+                print(f"❌ 股價太低: {latest['close']}")
+        except Exception as e:
+            print(f"⚠️ 發生錯誤: {e}")
             continue
             
+    print(f"--- 🏁 掃描結束 ---")
     return final_candidates
 
-# --- Firebase 上傳與主程式部分維持原樣 ---
+if __name__ == "__main__":
+    result = run_full_strategy()
+    print(f"✅ 最終精選名單: {result}") # 這行一定會印出來
+    upload_to_firebase(result)
