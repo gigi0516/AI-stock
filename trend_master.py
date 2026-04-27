@@ -75,3 +75,8 @@ if __name__ == "__main__":
     result = run_full_strategy()
     print(f"✅ 最終精選名單: {result}") # 這行一定會印出來
     upload_to_firebase(result)
+    # 請將這段替換到你的程式碼中
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/' 
+    })
