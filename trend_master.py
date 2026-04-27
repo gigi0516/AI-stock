@@ -19,80 +19,66 @@ def upload_to_firebase(candidates):
             firebase_admin.initialize_app(cred, {
                 'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'
             })
-        ref = db.reference('stock_alerts/trend_master')
+        
+        ref = db.reference('stock_alerts/bot_4')
         ref.set({
+            'bot_id': 'BOT_04_TREND',
+            'bot_name': '機器人四號：法人動態監控',
             'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
             'candidates': candidates,
-            'status': 'Success'
+            'criteria': '法人買超排行榜前列 (含 ETF)'
         })
-        print(f"📢 Firebase 同步成功！")
+        print(f"🚀 [Trend Master] 資料已推送到 bot_4")
     except Exception as e:
         print(f"❌ Firebase 錯誤: {e}")
 
-def run_full_strategy():
+def run_trend_strategy():
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN')
     if token: api.login_by_token(token)
     
     tw_now = get_taiwan_time()
-    # 擴大範圍到 10 天，確保跨週末也抓得到資料
-    start_date = (tw_now - timedelta(days=10)).strftime("%Y-%m-%d")
+    # 抓取最近 3 天的籌碼資料
+    start_date = (tw_now - timedelta(days=3)).strftime("%Y-%m-%d")
     
-    # 使用你原本的 100 檔名單 (這裡先列出部分測試
-raw_list = [
-    '00878', '00940', '0056', '2408', '00919', '2337', '00712', '2344', 
-    '00929', '2317', '055151', '00680L', '00918', '3481', '00993A', '00713', 
-    '6770', '1303', '4927', '6182', '1806', '1326', '00900', '2883', 
-    '054694', '00965', '00715L', '057992', '3231', '009813', '057640', '009820', 
-    '056119', '057848', '00904', '2867', '2301', '8112', '056932', '00688L', 
-    '050191', '00882', '059177', '057988', '08708U', '051340', '058906', '063811', 
-    '2886', '2103', '2884', '1905', '057343', '2327', '060620', '049480', '058899', 
-    '03719B', '1314', '00939', '00936', '08899U', '00922', '054658', '00665L', 
-    '3033', '2897', '00757', '053602', '034451', '00915', '009811', '00642U', '00637L'
-    # ... 如果有更多可以繼續補上
+    # --- 你提供的法人買超名單 (含個股、ETF、權證) ---
+    raw_list = [
+        '00878', '00940', '0056', '2408', '00919', '2337', '00712', '2344', 
+        '00929', '2317', '055151', '00680L', '00918', '3481', '00993A', '00713', 
+        '6770', '1303', '4927', '6182', '1806', '1326', '00900', '2883', 
+        '054694', '00965', '00715L', '057992', '3231', '009813', '057640', '009820', 
+        '056119', '057848', '00904', '2867', '2301', '8112', '056932', '00688L', 
+        '050191', '00882', '059177', '057988', '08708U', '051340', '058906', '063811', 
+        '2886', '2103', '2884', '1905', '057343', '2327', '060620', '049480', '058899', 
+        '03719B', '1314', '00939', '00936', '08899U', '00922', '054658', '00665L', 
+        '3033', '2897', '00757', '053602', '034451', '00915', '009811', '00642U', '00637L'
     ]
+    
     final_candidates = []
-
-    print(f"--- 🕵️ 數據修正模式 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
+    print(f"--- 🛰️ 機器人四號：開始掃描法人買超動向 ---")
 
     for stock_id in raw_list:
         try:
-            # ✅ 修正後的函式名稱
-            df = api.taiwan_stock_institutional_investors(
-                stock_id=stock_id, 
-                start_date=start_date
-            )
+            # 獲取三大法人買賣超資料
+            df = api.taiwan_stock_institutional_investors(stock_id=stock_id, start_date=start_date)
+            if df.empty: continue
             
-            if df.empty:
-                print(f"🔍 {stock_id}: ❌ 無法人資料")
-                continue
-
-            # 找出最後一個交易日
-            latest_date = df['date'].max()
-            df_latest = df[df['date'] == latest_date]
+            # 取得最新一天的資料
+            latest_data = df.iloc[-3:] # 確保抓到最後的紀錄
             
-            # 計算淨買超 (buy - sell)
-            # 這裡計算外資與投信的總和
-            foreign = df_latest[df_latest['name'] == 'Foreign_Investor']
-            trust = df_latest[df_latest['name'] == 'Investment_Trust']
+            # 檢查外資或投信是否有買進 (買進張數 > 0)
+            foreign_buy = latest_data[latest_data['name'] == 'Foreign_Investor']['buy'].sum()
+            sitc_buy = latest_data[latest_data['name'] == 'Investment_Trust']['buy'].sum()
             
-            f_net = foreign['buy'].sum() - foreign['sell'].sum()
-            t_net = trust['buy'].sum() - trust['sell'].sum()
-            
-            print(f"🔍 {stock_id} ({latest_date}): 外資 {f_net} | 投信 {t_net}")
-
-            # 條件：只要外資或投信其中一個是正的 (買超)
-            if f_net > 0 or t_net > 0:
-                print(f"   ✅ 符合籌碼優選！")
+            if foreign_buy > 0 or sitc_buy > 0:
+                print(f"✅ {stock_id}: 法人有動作 (外資:{foreign_buy} / 投信:{sitc_buy})")
                 final_candidates.append(stock_id)
-            
-        except Exception as e:
-            print(f"🔍 {stock_id}: ⚠️ 執行錯誤 {str(e)}")
+        except:
             continue
             
     return final_candidates
 
 if __name__ == "__main__":
-    result = run_full_strategy()
-    print(f"✅ 最終精選名單: {result}")
+    result = run_trend_strategy()
+    print(f"🏁 最終名單: {result}")
     upload_to_firebase(result)
