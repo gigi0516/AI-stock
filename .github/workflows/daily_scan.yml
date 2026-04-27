@@ -1,39 +1,36 @@
-name: Financial Bot Schedule
+name: Run All Stock Bots
+
 on:
+  workflow_dispatch: # 手動觸發按鈕
   schedule:
-    - cron: '30 7 * * 1-5'
-    - cron: '0 9 * * 1-5'
-  workflow_dispatch:
+    - cron: '30 8 * * 1-5' # 台灣時間 16:30 執行
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 更新到 v4，解決 Node.js 警告 [cite: 104]
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      # 更新到 v5，解決 Node.js 警告 [cite: 104]
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/set-up-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.9'
 
       - name: Install dependencies
         run: |
-          pip install FinMind pandas tqdm firebase-admin
+          pip install pandas FinMind firebase-admin
 
-      - name: Run Strategy
+      # --- 這裡開始是關鍵修改區 ---
+
+      - name: Run Robot 1 (Sentinel)
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }} # 映射新 Secret
-        run: python trend_master.py
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: python sentinel_bot.py  # 👈 執行 1 號機器人
 
-      # 偵錯步驟：印出目前資料夾有哪些檔案
-      - name: Check files
-        run: ls -R
-
-      - name: Run Strategy
+      - name: Run Robot 4 (Trend Master)
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-        run: python trend_master.py
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: python trend_master.py   # 👈 執行 4 號機器人
