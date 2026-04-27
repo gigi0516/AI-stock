@@ -55,23 +55,32 @@ def run_sentinel_strategy():
 
     print(f"--- 🛰️ 機器人一號 (Sentinel) 營收檢查流程開始 ---")
 
-    for stock_id in raw_list:
+   for stock_id in raw_list:
         try:
             df_rev = api.taiwan_stock_month_revenue(stock_id=stock_id, start_date=start_date)
-            if df_rev.empty: continue
+            if df_rev.empty or len(df_rev) < 2: continue
             
+            # 取得最新一筆 (當月) 和 前一筆 (上月)
             latest = df_rev.iloc[-1]
-            yoy = latest['revenue_year_growth_rate']
-            mom = latest['revenue_month_growth_rate']
+            previous = df_rev.iloc[-2]
             
-            # --- 修改後的邏輯：只要有漲就好 (雙增即過) ---
-            if yoy > 0 and mom > 0:
-                print(f"🎯 {stock_id}: ✅ 營收雙增 (YoY: {yoy}%, MoM: {mom}%)")
+            # 暴力比大小：
+            # 1. 本月營收 > 上月營收 (就是 MoM > 0)
+            # 2. 本月營收 > 去年同月營收 (就是 YoY > 0)
+            rev_now = latest['revenue']
+            rev_last_month = previous['revenue']
+            rev_last_year = latest['last_year_revenue']
+            
+            if rev_now > rev_last_month and rev_now > rev_last_year:
+                # 計算一下比例給日誌看
+                yoy_val = round(((rev_now - rev_last_year) / rev_last_year) * 100, 2)
+                print(f"🎯 {stock_id}: ✅ 確定雙增！(YoY: {yoy_val}%)")
                 final_candidates.append(stock_id)
             else:
-                print(f"   {stock_id}: ❌ 未達標 (YoY: {yoy}, MoM: {mom})")
+                print(f"   {stock_id}: 未達標")
                 
         except Exception as e:
+            print(f"   {stock_id}: 資料異常 {e}")
             continue
             
     return final_candidates
