@@ -1,9 +1,9 @@
 name: Run All Stock Bots
 
 on:
-  workflow_dispatch: # 手動觸發按鈕
+  workflow_dispatch:
   schedule:
-    - cron: '30 8 * * 1-5' # 台灣時間 16:30 執行
+    - cron: '30 8 * * 1-5'
 
 jobs:
   build:
@@ -19,26 +19,24 @@ jobs:
 
       - name: Install dependencies
         run: |
-              pip install pandas requests firebase-admin
+          # 確保所有需要的套件都裝好
+          pip install pandas FinMind firebase-admin requests
 
-      # --- 這裡開始是關鍵修改區 ---
-
-     
-     # 執行一號 (長線營收 - 假設檔案叫 long_term_rev.py)
-      - name: Run Robot 1 (Long-term Revenue)
+      # 執行一號 (營收雙增 - 需 FinMind)
+      - name: Run Robot 1 (Revenue)
         env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }} # 一號目前仍需要營收資料，通常由 FinMind 提供
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python sentinel_revenue.py
 
-      # 執行二號 (短線量能)
-      - name: Run Robot 2 (Volume Burst)
+      # 執行二號 (量能爆發 - OpenAPI)
+      - name: Run Robot 2 (Volume)
         env:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python volume_bot.py
 
-      # 執行四號 (法人籌碼)
-      - name: Run Robot 4 (Institutional Investors)
+      # 執行四號 (法人連買 - OpenAPI)
+      - name: Run Robot 4 (Institutional)
         env:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python trend_master.py
