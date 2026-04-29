@@ -19,7 +19,9 @@ def run_bot_4_strategy():
     if weekday >= 5:
         print(f"休息時間：今天是週{['六','日'][weekday-5]}，證交所沒開盤，不執行掃描。")
         return
-
+    if not data or len(data) == 0:
+        print("💡 台股今日休市（或尚未提供資料），機器人收工！")
+        return
     print(f"--- 🚀 機器人四號：開始全市場掃描 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
     
   
