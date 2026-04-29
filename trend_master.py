@@ -5,6 +5,24 @@ import firebase_admin
 from firebase_admin import credentials, db
 from datetime import datetime
 
+from datetime import datetime, timedelta, timezone
+
+def get_taiwan_time():
+    # 強制取得台灣時間 (UTC+8)
+    return datetime.now(timezone.utc) + timedelta(hours=8)
+
+def run_bot_4_strategy():
+    tw_now = get_taiwan_time()
+    weekday = tw_now.weekday()  # 0是週一, 5是週六, 6是週日
+
+    # 1. 檢查今天是不是週末
+    if weekday >= 5:
+        print(f"休息時間：今天是週{['六','日'][weekday-5]}，證交所沒開盤，不執行掃描。")
+        return
+
+    print(f"--- 🚀 機器人四號：開始全市場掃描 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
+    
+  
 def run_bot_4_strategy():
     print("--- 🚀 機器人四號：開始全市場法人淨買超掃描 ---")
     
