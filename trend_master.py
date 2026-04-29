@@ -1,84 +1,75 @@
+import requests
 import os
 import json
-import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, db
-from FinMind.data import DataLoader
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
-def get_taiwan_time():
-    return datetime.now(timezone.utc) + timedelta(hours=8)
-
-def upload_to_firebase(candidates):
-    fb_config = os.environ.get('FIREBASE_CONFIG')
-    if not fb_config: return
-    try:
-        cred_json = json.loads(fb_config)
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(cred_json)
-            firebase_admin.initialize_app(cred, {
-                'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'
-            })
-        
-        ref = db.reference('stock_alerts/bot_4')
-        ref.set({
-            'bot_id': 'BOT_04_TREND',
-            'bot_name': '機器人四號：法人動態監控',
-            'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-            'candidates': candidates,
-            'criteria': '法人買超排行榜前列 (含 ETF)'
-        })
-        print(f"🚀 [Trend Master] 資料已推送到 bot_4")
-    except Exception as e:
-        print(f"❌ Firebase 錯誤: {e}")
-
-def run_trend_strategy():
-    api = DataLoader()
-    token = os.environ.get('FINMIND_TOKEN')
-    if token: api.login_by_token(token)
+def run_bot_4_strategy():
+    print("--- 🚀 機器人四號：開始全市場法人淨買超掃描 ---")
     
-    tw_now = get_taiwan_time()
-    # 抓取最近 3 天的籌碼資料
-    start_date = (tw_now - timedelta(days=3)).strftime("%Y-%m-%d")
+    # 1. 從證交所 OpenAPI 抓取今日所有股票的法人買賣超
+    # URL 是你截圖中對應的「三大法人買賣超日報」
+    url = "https://openapi.twse.com.tw/v1/fund/T86W0"
+    response = requests.get(url)
+    if response.status_code != 200:
+        print("❌ 無法取得證交所資料")
+        return
     
-    # --- 你提供的法人買超名單 (含個股、ETF、權證) ---
-    raw_list = [
-        '00878', '00940', '0056', '2408', '00919', '2337', '00712', '2344', 
-        '00929', '2317', '055151', '00680L', '00918', '3481', '00993A', '00713', 
-        '6770', '1303', '4927', '6182', '1806', '1326', '00900', '2883', 
-        '054694', '00965', '00715L', '057992', '3231', '009813', '057640', '009820', 
-        '056119', '057848', '00904', '2867', '2301', '8112', '056932', '00688L', 
-        '050191', '00882', '059177', '057988', '08708U', '051340', '058906', '063811', 
-        '2886', '2103', '2884', '1905', '057343', '2327', '060620', '049480', '058899', 
-        '03719B', '1314', '00939', '00936', '08899U', '00922', '054658', '00665L', 
-        '3033', '2897', '00757', '053602', '034451', '00915', '009811', '00642U', '00637L'
-    ]
+    data = response.json()
     
-    final_candidates = []
-    print(f"--- 🛰️ 機器人四號：開始掃描法人買超動向 ---")
-
-    for stock_id in raw_list:
+    # 2. 篩選出『今日淨買超』的股票 (外資+投信 > 0)
+    today_net_buy_list = []
+    for item in data:
         try:
-            # 獲取三大法人買賣超資料
-            df = api.taiwan_stock_institutional_investors(stock_id=stock_id, start_date=start_date)
-            if df.empty: continue
+            # 取得外資與投信買賣超張數 (需處理逗點)
+            foreign = int(item['ForeignInvestorsBuySellDiff'].replace(',', ''))
+            sitc = int(item['InvestmentTrustBuySellDiff'].replace(',', ''))
             
-            # 取得最新一天的資料
-            latest_data = df.iloc[-3:] # 確保抓到最後的紀錄
-            
-            # 檢查外資或投信是否有買進 (買進張數 > 0)
-            foreign_buy = latest_data[latest_data['name'] == 'Foreign_Investor']['buy'].sum()
-            sitc_buy = latest_data[latest_data['name'] == 'Investment_Trust']['buy'].sum()
-            
-            if foreign_buy > 0 or sitc_buy > 0:
-                print(f"✅ {stock_id}: 法人有動作 (外資:{foreign_buy} / 投信:{sitc_buy})")
-                final_candidates.append(stock_id)
+            if (foreign + sitc) > 0:
+                today_net_buy_list.append(item['Code'])
         except:
             continue
-            
-    return final_candidates
+
+    # 3. 處理 Firebase 的「連續紀錄」
+    update_and_check_continuous(today_net_buy_list)
+
+def update_and_check_continuous(today_list):
+    fb_config = os.environ.get('FIREBASE_CONFIG')
+    if not fb_config: return
+    
+    # 初始化 Firebase (如果尚未初始化)
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(json.loads(fb_config))
+        firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
+    
+    # --- 連續性檢查邏輯 ---
+    # 我們把資料存在 history/day_1 (昨天) 和 history_day_2 (前天)
+    hist_ref = db.reference('bot_4_history')
+    yesterday = hist_ref.child('day_1').get() or []
+    the_day_before = hist_ref.child('day_2').get() or []
+    
+    # 找出「今天有」、「昨天也有」、「前天也有」的交集
+    final_candidates = list(set(today_list) & set(yesterday) & set(the_day_before))
+    
+    # 如果名單太長，我們回頭去抓這些股票的名稱 (或直接存代碼)
+    # 這裡為了簡單，我們先存符合條件的代碼
+    
+    # 4. 更新 Firebase 給 Android App 看的結果
+    db.reference('stock_alerts/bot_4').set({
+        'bot_name': '🚀 機器人四號：法人連續三日買超',
+        'last_update': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'candidates': final_candidates if final_candidates else ["今日尚無連續三日買超標的"],
+        'criteria': '全市場掃描：外資與投信連續三個交易日皆為淨買超'
+    })
+    
+    # 5. 重要：把歷史紀錄往後推一天，準備給明天用
+    hist_ref.update({
+        'day_2': yesterday,  # 昨天的變前天的
+        'day_1': today_list  # 今天的變昨天的
+    })
+    
+    print(f"🏁 掃描完成！符合連續三日買超共有 {len(final_candidates)} 檔。")
 
 if __name__ == "__main__":
-    result = run_trend_strategy()
-    print(f"🏁 最終名單: {result}")
-    upload_to_firebase(result)
+    run_bot_4_strategy()
