@@ -23,7 +23,18 @@ def run_sentinel_strategy():
             return
         
         data = response.json()
-        
+        # --- 段落：台股休市判斷 ---
+        tw_now = get_taiwan_time()
+    # 第一層：過濾週末
+        if tw_now.weekday() >= 5:
+            print(f"☕ 台灣時間 {tw_now.strftime('%Y-%m-%d')} 是週末，機器人放假去！")
+            return
+
+    # 第二層：過濾國定假日 (由 OpenAPI 資料是否為空來判斷)
+    # 執行 requests.get 後加入這行：
+        if not data or len(data) == 0:
+                print(f"😴 今日 ({tw_now.strftime('%Y-%m-%d')}) 證交所未產出資料，應為休市日。")
+                return
         # 2. Firebase 初始化
         fb_config = os.environ.get('FIREBASE_CONFIG')
         if not fb_config: 
