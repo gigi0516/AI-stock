@@ -28,4 +28,4 @@ jobs:
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
-        run: python sentinel_revenue.py  # 👈 執行 1 號機器人
+        run: python volume_bot.py  # 👈 執行 2 號機器人
