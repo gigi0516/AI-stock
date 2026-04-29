@@ -6,27 +6,29 @@ from firebase_admin import credentials, db
 from datetime import datetime, timedelta, timezone
 
 def get_taiwan_time():
+    # 強制取得台灣時間 (UTC+8)
     return datetime.now(timezone.utc) + timedelta(hours=8)
 
 def run_bot_3_strategy():
     print("--- 🚀 機器人三號：哆啦A夢美股情報局啟動 ---")
     
-def run_bot_3_strategy():
     try:
-        # 抓取 2 天資料來比對
+        # 1. 抓取數據 (抓取 2 天資料來比對漲跌)
+        # ^VIX 是恐慌指數, ^IXIC 是那斯達克
         data = yf.download(["^VIX", "^IXIC"], period="2d", interval="1d")
         
         # 💡 判斷美股是否休市
         if data.empty or len(data) < 2:
-            print("💡 美股目前休市中，哆啦A夢先去睡覺了...")
+            print("💡 美股目前休市中（或資料未更新），哆啦A夢先去睡覺了...")
             return
         
+        # 取得數據
         vix_val = round(data['Close']['^VIX'].iloc[-1], 2)
         nasdaq_now = data['Close']['^IXIC'].iloc[-1]
         nasdaq_prev = data['Close']['^IXIC'].iloc[-2]
         nasdaq_chg = round(((nasdaq_now - nasdaq_prev) / nasdaq_prev) * 100, 2)
 
-        # 2. 哆啦A夢情境邏輯
+        # 2. 哆啦A夢情境邏輯 (根據你的 VIX 四級標準)
         header = "🔵【大雄！我從未來帶回美股消息了！】\n"
         
         if vix_val < 20:
@@ -38,12 +40,14 @@ def run_bot_3_strategy():
         elif 30 <= vix_val < 40:
             vix_mood = f"😰 糟糕！VIX 衝到 {vix_val}，市場很不穩定！"
             vix_advice = "哇啊！胖虎拿著棒球棍衝過來了啦！快搭『時光機』回防，這時候進場很危險的！"
-        else:
+        else: # 40 以上
             vix_mood = f"😱 救命啊！VIX 爆表到 {vix_val}，這是極度恐慌狀態！"
             vix_advice = "大雄！世界末日啦！快披上『避難斗篷』躲進書桌抽屜！不管看到什麼都不要動！"
 
         market_summary = f"那斯達克漲跌：{nasdaq_chg}%"
         final_advice = vix_advice
+        
+        # 結合 Nasdaq 表現補充評語
         if nasdaq_chg > 1.2 and vix_val < 30:
             final_advice += " 而且那指噴出了，明天台股電子股可能會有好表現喔！"
         elif nasdaq_chg < -1.5:
@@ -61,7 +65,6 @@ def run_bot_3_strategy():
             cred = credentials.Certificate(json.loads(fb_config))
             firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
         
-        # --- 關鍵區塊：確保括號有成對 ---
         db.reference('stock_alerts/bot_3').set({
             'bot_name': '🤖 機器人三號：小叮噹觀測員',
             'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
