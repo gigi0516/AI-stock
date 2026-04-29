@@ -24,13 +24,6 @@ def upload_to_firebase(candidates):
         'criteria': '長線趨勢：連續 4 個月營收雙增 (YoY & MoM > 1%)'
     })
 
-def run_sentinel_strategy():
-    tw_now = get_taiwan_time()
-    # 營收通常每月 10 號前公布，週末執行也沒關係，但為了省資源可維持 1-5 執行
-    if tw_now.weekday() >= 5:
-        print("☕ 週末休息中")
-        return
-
     print("--- 🚀 機器人一號：長線營收趨勢掃描啟動 ---")
     
     token = os.environ.get('FINMIND_TOKEN', '')
