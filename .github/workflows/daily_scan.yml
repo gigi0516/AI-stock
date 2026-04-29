@@ -23,11 +23,7 @@ jobs:
 
       # --- 這裡開始是關鍵修改區 ---
 
-      - name: Run Robot 1 (Sentinel)
-        env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
-        run: python sentinel_revenue.py  # 👈 執行 1 號機器人
+     
       - name: Run Robot 4 (Trend Master)
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
