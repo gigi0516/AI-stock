@@ -12,11 +12,7 @@ def get_taiwan_time():
 def run_bot_4_strategy():
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
-    
-    # 1. 週末判斷
-    if tw_now.weekday() >= 5:
-        print("☕ 週末休市中，四號機器人休息。")
-        return
+
 
     print(f"--- 🚀 機器人四號：開始全市場法人淨買超掃描 ({today_str}) ---")
     
