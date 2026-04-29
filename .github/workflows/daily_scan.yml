@@ -1,9 +1,12 @@
 name: Run All Stock Bots
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 支援手動執行
   schedule:
+    # 台灣時間 16:30 執行 (週一至週五)
     - cron: '30 8 * * 1-5'
+    # 💡 建議增加一個台灣時間 05:30 執行 (週二至週六)，這樣三號機器人的美股情報最準
+    - cron: '30 21 * * 1-5' 
 
 jobs:
   build:
@@ -19,23 +22,29 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # 補上 tqdm 還有之前可能遺漏的 requests
-          pip install pandas FinMind firebase-admin requests tqdm
+          # 這裡必須包含 yfinance 才能跑三號
+          pip install pandas FinMind firebase-admin requests tqdm yfinance
 
-      # 執行一號 (營收雙增 - 需 FinMind)
+      # 執行一號 (長線營收)
       - name: Run Robot 1 (Revenue)
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python sentinel_revenue.py
 
-      # 執行二號 (量能爆發 - OpenAPI)
+      # 執行二號 (短線爆量)
       - name: Run Robot 2 (Volume)
         env:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python volume_bot.py
 
-      # 執行四號 (法人連買 - OpenAPI)
+      # 執行三號 (哆啦A夢美股)
+      - name: Run Robot 3 (Doraemon US)
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: python us_market_bot.py
+
+      # 執行四號 (法人連買)
       - name: Run Robot 4 (Institutional)
         env:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
