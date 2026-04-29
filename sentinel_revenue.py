@@ -8,7 +8,11 @@ from datetime import datetime, timedelta, timezone
 
 def get_taiwan_time():
     return datetime.now(timezone.utc) + timedelta(hours=8)
-
+    
+    if not data or len(data) == 0:
+        print("💡 台股今日休市（或尚未提供資料），機器人收工！")
+        return
+        
 def upload_to_firebase(candidates):
     fb_config = os.environ.get('FIREBASE_CONFIG')
     if not fb_config: return
