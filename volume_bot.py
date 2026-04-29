@@ -23,6 +23,9 @@ def run_bot_2_strategy():
         response = requests.get(url, headers=headers, timeout=30)
         data = response.json()
         
+        if not data or len(data) == 0:
+        print("💡 台股今日休市（或尚未提供資料），機器人收工！")
+        return
         today_vol_map = {}
         potential_candidates = []
 
