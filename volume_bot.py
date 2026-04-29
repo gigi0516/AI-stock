@@ -22,7 +22,7 @@ def run_bot_2_strategy():
     
     try:
         # --- 段落：台股休市判斷 ---
-    tw_now = get_taiwan_time()
+        tw_now = get_taiwan_time()
     # 第一層：過濾週末
     if tw_now.weekday() >= 5:
         print(f"☕ 台灣時間 {tw_now.strftime('%Y-%m-%d')} 是週末，機器人放假去！")
