@@ -19,8 +19,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # 確保所有需要的套件都裝好
-          pip install pandas FinMind firebase-admin requests
+          # 補上 tqdm 還有之前可能遺漏的 requests
+          pip install pandas FinMind firebase-admin requests tqdm
 
       # 執行一號 (營收雙增 - 需 FinMind)
       - name: Run Robot 1 (Revenue)
