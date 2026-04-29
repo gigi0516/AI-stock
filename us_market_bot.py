@@ -21,7 +21,7 @@ def run_bot_3_strategy():
 
     # 額外保險：檢查最新資料的日期
         last_trade_date = data.index[-1].date()
-         if last_trade_date < (datetime.now(timezone.utc) - timedelta(days=2)).date():
+        if last_trade_date < (datetime.now(timezone.utc) - timedelta(days=2)).date():
              print(f"📡 最後交易日為 {last_trade_date}，看來美股還在放長假。")
              return
         # 1. 抓取數據 (VIX 指數與 Nasdaq 指數)
