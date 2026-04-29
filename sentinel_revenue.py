@@ -31,51 +31,32 @@ def upload_to_firebase(candidates):
     except Exception as e:
         print(f"❌ Firebase 錯誤: {e}")
 
-def run_sentinel_strategy():
-    api = DataLoader()
-    token = os.environ.get('FINMIND_TOKEN')
-    if token: api.login_by_token(token)
+def run_long_term_revenue_strategy():
+    # 這裡我們需要 Firebase 幫我們記住『連續次數』
+    print("--- 🚀 機器人一號：長線營收趨勢掃描 (連續 4 月雙增) ---")
     
-    tw_now = get_taiwan_time()
-    # 關鍵：抓 400 天，確保能抓到去年的同一月份
-    start_date = (tw_now - timedelta(days=400)).strftime("%Y-%m-%d")
+    # 取得最新營收資料 (以 FinMind 或其他 API)
+    # 假設我們拿到一個 stock_id 的營收清單
     
-    # 你的 56 檔精選個股
-    raw_list = [
-        '2344', '3481', '2409', '2303', '2337', '6770', '2408', '2317', '2313', '4958', 
-        '1802', '2887', '2367', '2330', '1303', '2002', '3189', '3035', '2891', '4927', 
-        '6182', '2883', '2356', '1727', '2312', '3260', '2485', '2884', '2301', '3231', 
-        '2886', '2464', '2890', '2324', '2399', '1815', '8028', '2885', '2327', '8027', 
-        '2449', '8112', '2892', '1717', '5483', '5347', '2834', '2481', '3711', '6285', 
-        '2618', '4967', '2882', '8046', '3019', '2812', '3105', '1101', '2355', '1326', 
-        '2610', '5880', '8064', '2388', '2881', '4906', '2454'
-    ]
+    # 計算最新月份的 MoM 與 YoY
+    rev_now = df.iloc[-1]['revenue']
+    rev_prev = df.iloc[-2]['revenue']
+    rev_last_year = df.iloc[-13]['revenue']
     
-    final_candidates = []
-    print(f"--- 🛰️ 機器人一號：開始精準營收對決 ---")
-
-    for stock_id in raw_list:
-        try:
-            df = api.taiwan_stock_month_revenue(stock_id=stock_id, start_date=start_date)
-            if len(df) < 13: continue # 至少要有一年以上的資料
-            
-            # 1. 本月 (最新)
-            rev_now = df.iloc[-1]['revenue']
-            # 2. 上月
-            rev_prev = df.iloc[-2]['revenue']
-            # 3. 去年同月 (往前數第 12 個月)
-            rev_last_year = df.iloc[-13]['revenue']
-            
-            # 真正的雙增邏輯
-            if rev_now > rev_prev and rev_now > rev_last_year:
-                yoy = round(((rev_now - rev_last_year) / rev_last_year) * 100, 1)
-                print(f"🎯 {stock_id}: ✅ 雙增 (YoY: {yoy}%)")
-                final_candidates.append(stock_id)
-        except:
-            continue
-            
-    return final_candidates
-
-if __name__ == "__main__":
-    result = run_sentinel_strategy()
-    upload_to_firebase(result)
+    is_growing = (rev_now > rev_prev * 1.01) and (rev_now > rev_last_year * 1.01)
+    
+    # 從 Firebase 讀取該股票之前的『連續計數』
+    count_ref = db.reference(f'bot_1_counts/{stock_id}')
+    current_count = count_ref.get() or 0
+    
+    if is_growing:
+        new_count = current_count + 1
+    else:
+        new_count = 0 # 只要一個月沒達標，計數就歸零重來
+        
+    # 更新計數回 Firebase
+    count_ref.set(new_count)
+    
+    # 判斷是否達標 (連續 4 個月)
+    if new_count >= 4:
+        return True # 進入最終名單
