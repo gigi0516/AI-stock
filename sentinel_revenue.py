@@ -1,82 +1,93 @@
+import requests
 import os
 import json
-import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, db
-from FinMind.data import DataLoader
 from datetime import datetime, timedelta, timezone
 
 def get_taiwan_time():
     return datetime.now(timezone.utc) + timedelta(hours=8)
 
-def upload_to_firebase(candidates):
-    fb_config = os.environ.get('FIREBASE_CONFIG')
-    if not fb_config: return
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(json.loads(fb_config))
-        firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
-    
-    ref = db.reference('stock_alerts/bot_1')
-    ref.set({
-        'bot_name': '機器人一號：長線營收王',
-        'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-        'candidates': candidates if candidates else ["目前尚無連續 4 月雙增標的"],
-        'criteria': '長線趨勢：連續 4 個月營收雙增 (YoY & MoM > 1%)'
-    })
+def run_sentinel_strategy():
+    tw_now = get_taiwan_time()
+    today_str = tw_now.strftime("%Y-%m-%d")
+    print(f"--- 🚀 機器人一號：OpenAPI 營收監控啟動 ({today_str}) ---")
 
-    print("--- 🚀 機器人一號：長線營收趨勢掃描啟動 ---")
+    # 1. 抓取證交所：申報當月營收彙總表 (TWE044U)
+    url = "https://openapi.twse.com.tw/v1/statistics/TWE044U"
     
-    token = os.environ.get('FINMIND_TOKEN', '')
-    dl = DataLoader()
-    dl.login_token(token)
-
-    # 1. 取得台股所有編號 (此處以你關注的清單或全市場為例)
-    # 為了示範，我們先用一小組清單，如果你要全市場，需先抓取股票列表
-    target_stocks = ["2330", "2317", "2454", "2308", "2382", "3034"] 
-    
-    final_candidates = []
-
-    for stock_id in target_stocks:
-        try:
-            # 抓取過去 15 個月的營收 (確保有足夠數據算 YoY 和 連續性)
-            df = dl.taiwan_stock_month_revenue(
-                stock_id=stock_id,
-                start_date=(tw_now - timedelta(days=500)).strftime("%Y-%m-%d")
-            )
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            print("❌ 無法取得證交所營收資料")
+            return
+        
+        data = response.json()
+        
+        # 2. Firebase 初始化
+        fb_config = os.environ.get('FIREBASE_CONFIG')
+        if not fb_config: 
+            print("❌ 找不到 FIREBASE_CONFIG")
+            return
             
-            if len(df) < 15: continue
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(json.loads(fb_config))
+            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
 
-            # 轉成 numeric 確保計算正確
-            df['revenue'] = pd.to_numeric(df['revenue'])
-            
-            # --- 連續 4 個月雙增判斷邏輯 ---
-            success_months = 0
-            # 從最新的月份往回推算 4 個月
-            for i in range(1, 5):
-                idx = -i
-                rev_now = df.iloc[idx]['revenue']
-                rev_prev = df.iloc[idx-1]['revenue'] # 上個月
-                rev_last_year = df.iloc[idx-12]['revenue'] # 去年同月
+        qualified_candidates = []
+        
+        # 3. 處理每一檔股票
+        for item in data:
+            try:
+                code = item.get('StockCode')
+                name = item.get('StockName', '').strip()
                 
-                # 判定當月是否雙增 > 1%
-                is_growing = (rev_now > rev_prev * 1.01) and (rev_now > rev_last_year * 1.01)
+                # 取得數值 (當月、上月、去年同月)
+                rev_now = float(item.get('RevenueCurrentMonth', 0))
+                rev_last_month = float(item.get('RevenueLastMonth', 0))
+                rev_last_year = float(item.get('RevenueSameMonthLastYear', 0))
                 
-                if is_growing:
-                    success_months += 1
-                else:
-                    break # 只要一個月沒達標，就不用再往回看了
-            
-            if success_months >= 4:
-                stock_name = df.iloc[-1].get('stock_name', stock_id)
-                final_candidates.append(f"{stock_id} {stock_name}")
-                print(f"✅ 發現標的: {stock_id} 連續 {success_months} 個月雙增")
+                # 取得資料所屬月份 (例如 "114/3")
+                current_data_month = item.get('CurrentMonth', '')
 
-        except Exception as e:
-            print(f"❌ 處理 {stock_id} 時出錯: {e}")
-            continue
+                # 雙增判斷 (YoY > 1% 且 MoM > 1%)
+                is_growing = (rev_now > rev_last_month * 1.01) and (rev_now > rev_last_year * 1.01)
 
-    # 2. 同步結果
-    upload_to_firebase(final_candidates)
+                # 讀取 Firebase 紀錄的歷史狀態
+                history_ref = db.reference(f'bot_1_history/{code}')
+                history_data = history_ref.get() or {"count": 0, "last_month": ""}
+                
+                new_count = history_data.get("count", 0)
 
+                # 如果這是「新的月份」資料
+                if history_data.get("last_month") != current_data_month:
+                    if is_growing:
+                        new_count += 1
+                    else:
+                        new_count = 0 # 沒達成，歸零重計
+                    # 更新歷史紀錄
+                    history_ref.set({"count": new_count, "last_month": current_data_month})
+                
+                # 如果連續達成 4 個月，加入名單
+                if new_count >= 4:
+                    qualified_candidates.append(f"{code} {name}")
+                    
+            except Exception:
+                continue
+
+        # 4. 更新 App 顯示區
+        db.reference('stock_alerts/bot_1').set({
+            'bot_name': '🚀 機器人一號：長線營收王',
+            'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
+            'candidates': qualified_candidates if qualified_candidates else ["今日尚未發現連續 4 月雙增標的"],
+            'criteria': '長線趨勢：連續 4 個月營收雙增 (OpenAPI 自動累計)'
+        })
+        
+        print(f"🏁 掃描完成，符合條件：{len(qualified_candidates)} 檔")
+
+    except Exception as e:
+        print(f"❌ 一號機器人發生故障：{e}")
+
+# --- 程式入口 ---
 if __name__ == "__main__":
     run_sentinel_strategy()
