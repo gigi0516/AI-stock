@@ -11,11 +11,12 @@ def get_taiwan_time():
 def run_bot_3_strategy():
     print("--- 🚀 機器人三號：哆啦A夢美股情報局啟動 ---")
     
+def run_bot_3_strategy():
     try:
-        # 1. 抓取數據 (VIX 指數與 Nasdaq 指數)
+        # 抓取 2 天資料來比對
         data = yf.download(["^VIX", "^IXIC"], period="2d", interval="1d")
         
-        # 💡 判斷美股是否休市：如果抓不到這兩天的資料，或當天資料沒更新
+        # 💡 判斷美股是否休市
         if data.empty or len(data) < 2:
             print("💡 美股目前休市中，哆啦A夢先去睡覺了...")
             return
