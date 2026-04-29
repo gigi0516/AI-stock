@@ -24,8 +24,21 @@ jobs:
       # --- 這裡開始是關鍵修改區 ---
 
      
-      - name: Run Robot 1 (Sentinel)
+     # 執行一號 (長線營收 - 假設檔案叫 long_term_rev.py)
+      - name: Run Robot 1 (Long-term Revenue)
         env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }} # 一號目前仍需要營收資料，通常由 FinMind 提供
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
-        run: python volume_bot.py  # 👈 執行 2 號機器人
+        run: python long_term_rev.py
+
+      # 執行二號 (短線量能)
+      - name: Run Robot 2 (Volume Burst)
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: python volume_bot.py
+
+      # 執行四號 (法人籌碼)
+      - name: Run Robot 4 (Institutional Investors)
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: python trend_master.py
