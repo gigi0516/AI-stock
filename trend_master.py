@@ -33,6 +33,13 @@ def run_bot_4_strategy():
             return
 
         data = response.json()
+        # --- 段落：台股休市判斷 ---
+    tw_now = get_taiwan_time()
+    # 第一層：過濾週末
+        if tw_now.weekday() >= 5:
+            print(f"☕ 台灣時間 {tw_now.strftime('%Y-%m-%d')} 是週末，機器人放假去！")
+            return
+
         
         # 如果回傳是空的陣列，也代表沒開盤
         if not data or len(data) == 0:
