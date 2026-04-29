@@ -29,7 +29,7 @@ jobs:
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }} # 一號目前仍需要營收資料，通常由 FinMind 提供
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
-        run: python long_term_rev.py
+        run: python sentinel_revenue.py
 
       # 執行二號 (短線量能)
       - name: Run Robot 2 (Volume Burst)
