@@ -37,30 +37,29 @@ def run_bot_2_strategy():
         history_ref = db.reference('bot_2_history/last_volume')
         yesterday_vol_map = history_ref.get() or {}
 
-        # 3. 開始比對
-        for item in data:
-            code = item.get('Code')
-            name = item.get('Name').strip()
-            try:
-                # 取得今日量與昨日量
-                today_vol = int(item.get('TradeVolume', '0')) // 1000 # 轉張數
-                yesterday_vol = yesterday_vol_map.get(code, 0)
-                
-                # 紀錄今天量，準備給明天用
-                today_vol_map[code] = today_vol
+        # 3. 推送到 Firebase
+        fb_config = os.environ.get('FIREBASE_CONFIG')
+        if not fb_config:
+            print("❌ 找不到 FIREBASE_CONFIG")
+            return
 
-                # 篩選門檻
-                # - 今日 > 2000 張
-                # - 今日 > 昨天 2 倍
-                # - 漲幅 (Change) 為正數
-                change = float(item.get('Change', '0'))
-                
-                if today_vol > 2000 and yesterday_vol > 0:
-                    if today_vol > (yesterday_vol * 2) and change > 0:
-                        potential_candidates.append(f"{code} {name}")
-                        print(f"🔥 爆量發現: {code} {name} (今:{today_vol} / 昨:{yesterday_vol})")
-            except:
-                continue
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(json.loads(fb_config))
+            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
+        
+        db.reference('stock_alerts/bot_3').set({
+            'bot_name': '🤖 機器人三號：小叮噹觀測員',
+            'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
+            'candidates': [final_report],
+            'criteria': 'VIX分級：10-20穩定/20-30不穩/30-40焦慮/40+恐慌'
+        })
+        print("✅ 哆啦A夢專業版回報成功！")
+
+    except Exception as e:
+        print(f"❌ 三號機器人發生故障：{e}")
+
+if __name__ == "__main__":
+    run_bot_3_strategy()
 
         # 4. 更新 Firebase
         # 更新給 App 看的名單
