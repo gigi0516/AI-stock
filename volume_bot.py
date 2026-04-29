@@ -16,7 +16,6 @@ def run_bot_2_strategy():
 
     print("--- 🚀 機器人二號：開始全市場量能爆發掃描 ---")
     
-    # 1. 抓取今日成交資料
     url = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
     headers = {'User-Agent': 'Mozilla/5.0'}
     
@@ -27,7 +26,6 @@ def run_bot_2_strategy():
         today_vol_map = {}
         potential_candidates = []
 
-        # 2. 獲取 Firebase 紀錄的「昨天成交量」
         fb_config = os.environ.get('FIREBASE_CONFIG')
         if not fb_config: return
         if not firebase_admin._apps:
@@ -37,32 +35,26 @@ def run_bot_2_strategy():
         history_ref = db.reference('bot_2_history/last_volume')
         yesterday_vol_map = history_ref.get() or {}
 
-        # 3. 推送到 Firebase
-        fb_config = os.environ.get('FIREBASE_CONFIG')
-        if not fb_config:
-            print("❌ 找不到 FIREBASE_CONFIG")
-            return
+        for item in data:
+            code = item.get('Code')
+            name = item.get('Name', '').strip()
+            try:
+                today_vol = int(item.get('TradeVolume', '0').replace(',', '')) // 1000
+                yesterday_vol = yesterday_vol_map.get(code, 0)
+                today_vol_map[code] = today_vol
 
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(json.loads(fb_config))
-            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
-        
-        db.reference('stock_alerts/bot_3').set({
-            'bot_name': '🤖 機器人三號：小叮噹觀測員',
-            'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-            'candidates': [final_report],
-            'criteria': 'VIX分級：10-20穩定/20-30不穩/30-40焦慮/40+恐慌'
-        })
-        print("✅ 哆啦A夢專業版回報成功！")
+                # 篩選：量增 2 倍且漲 (Change > 0) 且量 > 2000
+                change_str = item.get('Change', '0')
+                change = float(change_str) if change_str != ' ' else 0
+                
+                if today_vol > 2000 and yesterday_vol > 0:
+                    if today_vol > (yesterday_vol * 2) and change > 0:
+                        potential_candidates.append(f"{code} {name}")
+                        print(f"🔥 爆量發現: {code} {name} (今:{today_vol} / 昨:{yesterday_vol})")
+            except:
+                continue
 
-    except Exception as e:
-        print(f"❌ 三號機器人發生故障：{e}")
-
-if __name__ == "__main__":
-    run_bot_3_strategy()
-
-        # 4. 更新 Firebase
-        # 更新給 App 看的名單
+        # --- 這裡就是你原本報錯的縮排區塊 ---
         db.reference('stock_alerts/bot_2').set({
             'bot_name': '🚀 機器人二號：短線量能爆發',
             'last_update': tw_now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -70,9 +62,7 @@ if __name__ == "__main__":
             'criteria': '短線爆發：今日成交量 > 昨日 2 倍 且 股價收紅'
         })
 
-        # 更新歷史量能紀錄 (給明天比對用)
         history_ref.set(today_vol_map)
-        
         print(f"🏁 二號機器人掃描完成，發現 {len(potential_candidates)} 檔。")
 
     except Exception as e:
