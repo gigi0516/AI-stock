@@ -15,6 +15,11 @@ def run_bot_3_strategy():
         # 1. 抓取數據 (VIX 指數與 Nasdaq 指數)
         data = yf.download(["^VIX", "^IXIC"], period="2d", interval="1d")
         
+        # 💡 判斷美股是否休市：如果抓不到這兩天的資料，或當天資料沒更新
+        if data.empty or len(data) < 2:
+            print("💡 美股目前休市中，哆啦A夢先去睡覺了...")
+            return
+        
         vix_val = round(data['Close']['^VIX'].iloc[-1], 2)
         nasdaq_now = data['Close']['^IXIC'].iloc[-1]
         nasdaq_prev = data['Close']['^IXIC'].iloc[-2]
