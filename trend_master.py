@@ -15,13 +15,25 @@ def run_bot_4_strategy():
     tw_now = get_taiwan_time()
     weekday = tw_now.weekday()  # 0是週一, 5是週六, 6是週日
 
-    # 1. 檢查今天是不是週末
-    if weekday >= 5:
-        print(f"休息時間：今天是週{['六','日'][weekday-5]}，證交所沒開盤，不執行掃描。")
+def run_bot_2_strategy():
+    # --- 新增這段判斷 ---
+    tw_now = get_taiwan_time()
+    today_str = tw_now.strftime("%Y-%m-%d")
+    
+    # 週末直接收工 (雖然 YAML 過濾了，但 Python 雙重保險更好)
+    if tw_now.weekday() >= 5:
+        print("☕ 週末休市中，不執行。")
         return
+
+    # 抓取資料後判斷是否為空
+    url = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
+    response = requests.get(url, timeout=30)
+    data = response.json()
+
     if not data or len(data) == 0:
-        print("💡 台股今日休市（或尚未提供資料），機器人收工！")
+        print(f"😴 今天 ({today_str}) 台股休市或尚未產出資料，機器人先去休息囉！")
         return
+  
     print(f"--- 🚀 機器人四號：開始全市場掃描 (台灣時間: {tw_now.strftime('%Y-%m-%d')}) ---")
     
   
