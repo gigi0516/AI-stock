@@ -9,7 +9,6 @@ def get_taiwan_time():
     return datetime.now(timezone.utc) + timedelta(hours=8)
 
 def run_bot_2_strategy():
-    # --- 1. 時間判斷 (第一層：過濾週末) ---
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
     
@@ -19,31 +18,27 @@ def run_bot_2_strategy():
 
     print(f"--- 🚀 機器人二號：開始全市場量能爆發掃描 ({today_str}) ---")
     
-    # 2. 抓取今日成交資料
-    
-    url = "https://openapi.twse.com.tw/v1/fund/T86W0"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    # [關鍵修正] 使用正確的 API 網址：全市場收盤行情
+    url = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     
     try:
-        # 執行網路請求
-        response = requests.get(url, headers=headers, timeout=30)
-        data = response.json()
+        response = requests.get(url, headers=headers, timeout=60) # 檔案大，增加超時時間
         
-        # --- 3. 休市判斷 (第二層：過濾國定假日) ---
-        # 如果證交所 API 回傳空內容，代表今日休市
-        if not data or len(data) == 0:
-            print(f"😴 今日 ({today_str}) 證交所未產出資料，應為休市日。")
-            return
-
-        today_vol_map = {}
-        potential_candidates = []
-
-        # 4. Firebase 初始化
-        fb_config = os.environ.get('FIREBASE_CONFIG')
-        if not fb_config: 
-            print("❌ 找不到 FIREBASE_CONFIG")
+        # [加強保護] 攔截非 JSON 或空白內容
+        if response.status_code != 200 or not response.text.strip():
+            print(f"😴 今日 ({today_str}) 證交所尚未產出收盤資料。")
             return
             
+        try:
+            data = response.json()
+        except:
+            print("❌ 證交所資料格式錯誤，無法解析 JSON。")
+            return
+
+        # Firebase 初始化
+        fb_config = os.environ.get('FIREBASE_CONFIG')
+        if not fb_config: return
         if not firebase_admin._apps:
             cred = credentials.Certificate(json.loads(fb_config))
             firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
@@ -51,23 +46,31 @@ def run_bot_2_strategy():
         history_ref = db.reference('bot_2_history/last_volume')
         yesterday_vol_map = history_ref.get() or {}
 
+        today_vol_map = {}
+        potential_candidates = []
+
         # 5. 開始比對爆量邏輯
         for item in data:
-            code = item.get('Code')
-            name = item.get('Name', '').strip()
             try:
-                # 取得今日量與昨日量 (轉張數)
-                raw_vol = item.get('TradeVolume', '0').replace(',', '')
+                # [欄位對齊] 根據 STOCK_DAY_ALL 的正確 Key 名稱
+                code = item.get('Code', item.get('證券代號'))
+                name = item.get('Name', item.get('證券名稱', '')).strip()
+                if not code: continue
+
+                # 取得今日量 (STOCK_DAY_ALL 的單位是股，除以 1000 變張)
+                raw_vol = str(item.get('TradeVolume', '0')).replace(',', '')
                 today_vol = int(raw_vol) // 1000 
-                yesterday_vol = yesterday_vol_map.get(code, 0)
                 
                 # 紀錄今天量，準備給明天用
                 today_vol_map[code] = today_vol
+                
+                yesterday_vol = yesterday_vol_map.get(code, 0)
 
-                # 篩選條件：今日 > 2000張、量增2倍、漲幅為正
-                change_str = item.get('Change', '0').replace(',', '')
+                # 取得漲跌 (Change)
+                change_str = str(item.get('Change', '0')).replace(',', '')
                 change = float(change_str)
                 
+                # 篩選條件：今日 > 2000張、量增2倍、漲幅 > 0
                 if today_vol > 2000 and yesterday_vol > 0:
                     if today_vol > (yesterday_vol * 2) and change > 0:
                         potential_candidates.append(f"{code} {name}")
@@ -75,15 +78,15 @@ def run_bot_2_strategy():
             except:
                 continue
 
-        # 6. 更新 Firebase 顯示區
+        # 6. 更新 Firebase
         db.reference('stock_alerts/bot_2').set({
             'bot_name': '🚀 機器人二號：短線量能爆發',
-            'last_update': tw_now.strftime("%Y-%m-%d %H:%M:%S"),
+            'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
             'candidates': potential_candidates if potential_candidates else ["今日尚無量能翻倍標的"],
-            'criteria': '短線爆發：今日成交量 > 昨日 2 倍 且 股價收紅'
+            'criteria': '短線爆發：成交量 > 昨日 2 倍 且 股價收紅'
         })
 
-        # 7. 更新歷史量能紀錄 (儲存今日量給明天比對用)
+        # 7. 儲存紀錄
         history_ref.set(today_vol_map)
         print(f"🏁 二號機器人掃描完成，發現 {len(potential_candidates)} 檔。")
 
