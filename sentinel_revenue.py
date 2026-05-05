@@ -63,51 +63,31 @@ def run_sentinel_strategy():
                 return
 
         # 3. 處理每一檔股票
+        # ... (前面的 for 迴圈處理股票邏輯) ...
         for item in data:
             try:
-                # 修正：證交所 OpenAPI 的欄位名稱通常是中文或不同的英文縮寫
-                code = item.get('StockCode')
-                if not code: continue
-                name = item.get('StockName', '').strip()
-                
-                # [關鍵修正點]：將原本的 RevenueCurrentMonth 等換成 API 實際提供的 Key
-                # 這裡使用了備選機制，確保無論它是中文還是英文 Key 都能抓到
-                rev_now = float(item.get('Revenue', item.get('當月營收', 0)))
-                rev_last_month = float(item.get('LastMonthRevenue', item.get('上月營收', 0)))
-                rev_last_year = float(item.get('LastYearSameMonthRevenue', item.get('去年同月營收', 0)))
-                
-                # 資料月份 (例如 "114/3")
-                current_data_month = item.get('CurrentMonth', item.get('出表日期', ''))
-            try:
-                code = item.get('StockCode')
-                if not code: continue
-                name = item.get('StockName', '').strip()
-                
-                rev_now = float(item.get('RevenueCurrentMonth', 0))
-                rev_last_month = float(item.get('RevenueLastMonth', 0))
-                rev_last_year = float(item.get('RevenueSameMonthLastYear', 0))
-                current_data_month = item.get('CurrentMonth', '')
-
-                # 雙增判斷 (YoY > 1% 且 MoM > 1%)
-                is_growing = (rev_now > rev_last_month * 1.01) and (rev_now > rev_last_year * 1.01)
-
-                # 讀取歷史狀態
-                history_ref = db.reference(f'bot_1_history/{code}')
-                history_data = history_ref.get() or {"count": 0, "last_month": ""}
-                new_count = history_data.get("count", 0)
-
-                if history_data.get("last_month") != current_data_month:
-                    if is_growing:
-                        new_count += 1
-                    else:
-                        new_count = 0
-                    history_ref.set({"count": new_count, "last_month": current_data_month})
-                
-                if new_count >= 4:
-                    qualified_candidates.append(f"{code} {name}")
-                    
+                # 股票處理邏輯
+                pass 
             except Exception:
                 continue
+
+        # [重點] 檢查這裡的縮排，必須與 for 迴圈對齊，而不是在 for 裡面
+        try:
+            # 4. 更新 App 顯示區 (Firebase 路徑必須與 App 內的 setupListener 一致)
+            db.reference('stock_alerts/bot_1').set({
+                'bot_name': '🚀 機器人一號：長線營收王',
+                'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
+                'candidates': qualified_candidates if qualified_candidates else ["今日尚未發現連續 4 月雙增標的"],
+                'criteria': '長線趨勢：連續 4 個月營收雙增'
+            })
+            
+            print(f"🏁 掃描完成，符合條件：{len(qualified_candidates)} 檔")
+
+        except Exception as e:
+            print(f"❌ 更新 Firebase 時發生錯誤: {e}")
+
+    except Exception as e:
+        print(f"❌ 一號機器人發生嚴重故障：{e}")
 
         # 4. 更新 App 顯示區 (注意路徑與 App 內一致)
         db.reference('stock_alerts/bot_1').set({
