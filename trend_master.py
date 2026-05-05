@@ -14,15 +14,12 @@ def run_bot_4_strategy():
     today_str = tw_now.strftime("%Y-%m-%d")
     print(f"--- 🚀 機器人四號：FinMind 法人籌碼掃描啟動 ({today_str}) ---")
 
-    # 1. 初始化 FinMind (直接讀取 GitHub Secrets 中的 Token)
+    # 1. 初始化 FinMind
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN', '')
 
-    
-        
-        # 為了避免免費版 API 次數瞬間用完，我們優先檢查你持股或熱門股
-        # 或者你可以設定只跑前 500 檔市值較大的
-        top_100_stocks = [
+    # 市值前 100 名代碼清單
+    top_100_stocks = [
         "2330", "2308", "2454", "2317", "3711", "0050", "2383", "3037", "2345", "2881",
         "2382", "2882", "2412", "2891", "3017", "2303", "7769", "2360", "6669", "2408",
         "2368", "1303", "2885", "2327", "3653", "5274", "3443", "8046", "0056", "2887",
@@ -34,32 +31,33 @@ def run_bot_4_strategy():
         "3105", "6770", "2912", "4938", "3481", "2615", "1802", "3293", "5871", "6789",
         "2376", "5876", "2404", "2618", "1101", "2609"
     ]
-        for stock_id in top_100_stocks:
-    try:
-        # 使用 FinMind 抓取該個股今日法人資料
-        df = api.taiwan_stock_holding_shares_per(
-            stock_id=stock_id,
-            start_date=today_str,
-            token=token
-        )
-        
-        if not df.empty:
-            # 判斷外資與投信是否同時 > 0
-            if df.iloc[-1]['Foreign_Investors_Buy'] > 0 and df.iloc[-1]['Investment_Trust_Buy'] > 0:
-                qualified_candidates.append(stock_id)
-    except:
-        continue
-        
-        if df.empty:
-            print(f"😴 FinMind 尚未更新今日 ({today_str}) 的法人資料，可能需等 15:30 後。")
-            return
-        
-        # 取得符合條件的股票代碼清單
-        today_net_buy_list = qualified['stock_id'].tolist()
-        
-        print(f"✅ 成功提取法人同步買進標的，共 {len(today_net_buy_list)} 檔")
 
-        # 4. Firebase 初始化與寫入
+    qualified_candidates = []
+
+    try:
+        # 2. 核心迴圈：逐一檢查標的
+        for stock_id in top_100_stocks:
+            try:
+                df = api.taiwan_stock_holding_shares_per(
+                    stock_id=stock_id,
+                    start_date=today_str,
+                    token=token
+                )
+                
+                if not df.empty:
+                    # 判斷外資與投信是否同時買進 (Buy > 0)
+                    # 注意：FinMind 欄位為 Foreign_Investors_Buy 與 Investment_Trust_Buy
+                    f_buy = df.iloc[-1].get('Foreign_Investors_Buy', 0)
+                    i_buy = df.iloc[-1].get('Investment_Trust_Buy', 0)
+                    
+                    if f_buy > 0 and i_buy > 0:
+                        qualified_candidates.append(stock_id)
+            except:
+                continue
+
+        print(f"✅ 掃描完成，符合法人雙買標的共 {len(qualified_candidates)} 檔")
+
+        # 3. Firebase 初始化與寫入
         fb_config_str = os.environ.get('FIREBASE_CONFIG')
         if fb_config_str and not firebase_admin._apps:
             cred = credentials.Certificate(json.loads(fb_config_str))
@@ -69,8 +67,8 @@ def run_bot_4_strategy():
             db.reference('stock_alerts/bot_4').set({
                 'bot_name': '🚀 機器人四號：法人連買王',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-                'candidates': today_net_buy_list if today_net_buy_list else ["今日法人尚未同步買進"],
-                'criteria': '籌碼面：外資與投信當日合力買超 (FinMind 穩定版)'
+                'candidates': qualified_candidates if qualified_candidates else ["今日法人尚未同步買進"],
+                'criteria': '籌碼面：市值百強中外資與投信當日合力買超'
             })
             print(f"🏁 四號機 Firebase 更新完畢")
 
