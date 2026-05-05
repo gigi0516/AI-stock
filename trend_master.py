@@ -11,7 +11,7 @@ def get_taiwan_time():
 def run_bot_4_strategy():
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
-    print(f"--- 🚀 機器人四號：百強籌碼黃金篩選 ({today_str}) ---")
+    print(f"--- 🚀 機器人四號：百強連買嚴格版 ({today_str}) ---")
 
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN', '') 
@@ -30,32 +30,41 @@ def run_bot_4_strategy():
     ]
 
     qualified_candidates = []
+    # 抓取最近 7 天資料，確保包含昨日交易日
+    start_date = (tw_now - timedelta(days=7)).strftime("%Y-%m-%d")
 
     try:
-        # 抓取今日全市場資料 (我們試著一次拿，如果沒權限再改迴圈)
         for stock_id in top_100_stocks:
             try:
-                # 抓取日成交與法人資料
-                df_deal = api.taiwan_stock_daily(stock_id=stock_id, start_date=today_str, token=token)
-                df_chip = api.taiwan_stock_holding_shares_per(stock_id=stock_id, start_date=today_str, token=token)
+                # 抓取法人資料與成交資料
+                df_chip = api.taiwan_stock_holding_shares_per(stock_id=stock_id, start_date=start_date, token=token)
+                df_deal = api.taiwan_stock_daily(stock_id=stock_id, start_date=start_date, token=token)
                 
-                if df_deal.empty or df_chip.empty: continue
+                if df_chip.empty or len(df_chip) < 2 or df_deal.empty:
+                    continue
                 
-                # 計算籌碼面
-                f_buy = df_chip.iloc[-1]['Foreign_Investors_Buy']
-                i_buy = df_chip.iloc[-1]['Investment_Trust_Buy']
-                total_buy_shares = (f_buy + i_buy) / 1000 # 轉成張數
+                # 排序資料 (最新在最後)
+                df_chip = df_chip.sort_values('date')
+                df_deal = df_deal.sort_values('date')
                 
-                # 計算價格面
-                spread = df_deal.iloc[-1]['Spread']
+                # --- 核心嚴格邏輯 ---
+                # 1. 計算今日(T)與昨日(T-1)的合計淨買超 (外資+投信)
+                today_chip = df_chip.iloc[-1]
+                prev_chip = df_chip.iloc[-2]
                 
-                # --- 黃金篩選條件 ---
-                # 1. 今日法人合計買超 > 500 張
-                # 2. 今日股價收紅 (漲幅 > 0)
-                if total_buy_shares > 500 and spread > 0:
+                today_net = today_chip['Foreign_Investors_Buy'] + today_chip['Investment_Trust_Buy']
+                prev_net = prev_chip['Foreign_Investors_Buy'] + prev_chip['Investment_Trust_Buy']
+                
+                # 2. 取得今日價格漲跌
+                today_spread = df_deal.iloc[-1]['Spread']
+                
+                # --- 判斷開關 ---
+                # 條件：今日淨買超 > 0 且 昨日淨買超 > 0 且 今日收紅
+                if today_net > 0 and prev_net > 0 and today_spread > 0:
                     qualified_candidates.append(stock_id)
-                    print(f"🔥 符合黃金條件：{stock_id} (買超 {int(total_buy_shares)} 張)")
-            except:
+                    print(f"💎 連買強勢股：{stock_id}")
+                    
+            except Exception:
                 continue
 
         # Firebase 更新
@@ -66,12 +75,12 @@ def run_bot_4_strategy():
 
         if firebase_admin._apps:
             db.reference('stock_alerts/bot_4').set({
-                'bot_name': '🚀 四號機：百強籌碼金選',
+                'bot_name': '🚀 四號機：百強連買嚴格版',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-                'candidates': qualified_candidates if qualified_candidates else ["今日百強無達標標的"],
-                'criteria': '條件：市值百強、法人合計買超 > 500張 且 股價收紅'
+                'candidates': qualified_candidates if qualified_candidates else ["今日百強無連續買超標的"],
+                'criteria': '條件：市值百強、法人合計連續兩日買超 且 今日收紅'
             })
-            print(f"🏁 篩選完畢，共 {len(qualified_candidates)} 檔")
+            print(f"🏁 嚴格篩選完畢，共 {len(qualified_candidates)} 檔達標")
 
     except Exception as e:
         print(f"❌ 四號機執行失敗: {e}")
