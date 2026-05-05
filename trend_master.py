@@ -11,7 +11,7 @@ def get_taiwan_time():
 def run_bot_4_strategy():
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
-    print(f"--- 🚀 機器人四號：法人連買進階過濾啟動 ({today_str}) ---")
+    print(f"--- 🚀 機器人四號：百強籌碼集中過濾 ({today_str}) ---")
 
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN', '')
@@ -30,7 +30,6 @@ def run_bot_4_strategy():
     ]
 
     qualified_candidates = []
-    # 抓取最近 10 天，確保能取得至少 3 個交易日
     start_date = (tw_now - timedelta(days=10)).strftime("%Y-%m-%d")
 
     try:
@@ -42,38 +41,29 @@ def run_bot_4_strategy():
                     token=token
                 )
                 
-                # 必須至少有 3 天的交易資料
                 if df.empty or len(df) < 3:
                     continue
                 
-                # 確保按日期排序 (最新在最後)
                 df = df.sort_values('date')
-                day_T = df.iloc[-1]   # 今天
-                day_T1 = df.iloc[-2]  # 昨天
-                day_T2 = df.iloc[-3]  # 前天
-
-                # --- 第一關與踢出機制 ---
-                # 今日外資與投信買賣超
-                f_buy_T = day_T.get('Foreign_Investors_Buy', 0)
-                i_buy_T = day_T.get('Investment_Trust_Buy', 0)
-                total_net_T = f_buy_T + i_buy_T
-
-                # 踢出機制：今日合記淨買超必須 > 0
-                if total_net_T <= 0:
+                
+                # 計算過去三天的法人合計淨買超 (外資+投信)
+                # 我們看最後三筆資料
+                recent_3 = df.tail(3).copy()
+                recent_3['total_net'] = recent_3['Foreign_Investors_Buy'] + recent_3['Investment_Trust_Buy']
+                
+                today_net = recent_3.iloc[-1]['total_net']
+                
+                # --- 優化後的鬆綁條件 ---
+                # 1. 今日「外資+投信」合計必須是正數 (代表大戶整體在買)
+                if today_net <= 0:
                     continue
                 
-                # 第一關：今日外資「或」投信任一買超 > 0
-                gate_1 = (f_buy_T > 0) or (i_buy_T > 0)
-
-                # --- 第二關：前兩日也要有買超紀錄 ---
-                # 檢查 T-1
-                gate_T1 = (day_T1.get('Foreign_Investors_Buy', 0) > 0) or (day_T1.get('Investment_Trust_Buy', 0) > 0)
-                # 檢查 T-2
-                gate_T2 = (day_T2.get('Foreign_Investors_Buy', 0) > 0) or (day_T2.get('Investment_Trust_Buy', 0) > 0)
-
-                if gate_1 and gate_T1 and gate_T2:
+                # 2. 趨勢檢查：過去三天中，至少有兩天法人合計是買超的
+                buy_days = len(recent_3[recent_3['total_net'] > 0])
+                
+                if buy_days >= 2:
                     qualified_candidates.append(stock_id)
-                    print(f"✅ 符合連續買超：{stock_id}")
+                    print(f"✅ 籌碼集中標的：{stock_id}")
                     
             except Exception:
                 continue
@@ -86,10 +76,10 @@ def run_bot_4_strategy():
 
         if firebase_admin._apps:
             db.reference('stock_alerts/bot_4').set({
-                'bot_name': '🚀 機器人四號：法人連買王 (進階過濾)',
+                'bot_name': '🚀 機器人四號：權值籌碼王',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-                'candidates': qualified_candidates if qualified_candidates else ["今日無符合連續買超標的"],
-                'criteria': '1.今日外資或投信買超且合計>0 2.連續三天皆有法人買超紀錄'
+                'candidates': qualified_candidates if qualified_candidates else ["今日權值股籌碼較分散"],
+                'criteria': '1.今日外資投信合計淨買超 2.過去三天內有兩天以上為淨買超'
             })
             print(f"🏁 掃描完畢，符合條件共 {len(qualified_candidates)} 檔")
 
