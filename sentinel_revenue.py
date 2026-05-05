@@ -62,10 +62,22 @@ def run_sentinel_strategy():
                 print(f"❌ Firebase 初始化失敗: {e}")
                 return
 
-        qualified_candidates = []
-        
-        # 3. 處理每一檔股票 (原本邏輯保持不變)
+        # 3. 處理每一檔股票
         for item in data:
+            try:
+                # 修正：證交所 OpenAPI 的欄位名稱通常是中文或不同的英文縮寫
+                code = item.get('StockCode')
+                if not code: continue
+                name = item.get('StockName', '').strip()
+                
+                # [關鍵修正點]：將原本的 RevenueCurrentMonth 等換成 API 實際提供的 Key
+                # 這裡使用了備選機制，確保無論它是中文還是英文 Key 都能抓到
+                rev_now = float(item.get('Revenue', item.get('當月營收', 0)))
+                rev_last_month = float(item.get('LastMonthRevenue', item.get('上月營收', 0)))
+                rev_last_year = float(item.get('LastYearSameMonthRevenue', item.get('去年同月營收', 0)))
+                
+                # 資料月份 (例如 "114/3")
+                current_data_month = item.get('CurrentMonth', item.get('出表日期', ''))
             try:
                 code = item.get('StockCode')
                 if not code: continue
