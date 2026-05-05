@@ -2,30 +2,21 @@ import os
 import json
 import firebase_admin
 from firebase_admin import credentials, db
+from FinMind.data import DataLoader
 from datetime import datetime, timedelta, timezone
 
 def get_taiwan_time():
-    # 強制取得台灣時間 (UTC+8)
     return datetime.now(timezone.utc) + timedelta(hours=8)
 
 def run_bot_4_strategy():
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
-    print(f"--- 🚀 機器人四號：市值百強全量測試啟動 ({today_str}) ---")
+    print(f"--- 🚀 機器人四號：百強籌碼黃金篩選 ({today_str}) ---")
 
-    # 1. 初始化 Firebase
-    fb_config_str = os.environ.get('FIREBASE_CONFIG')
-    if fb_config_str and not firebase_admin._apps:
-        try:
-            cred = credentials.Certificate(json.loads(fb_config_str))
-            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
-        except Exception as e:
-            print(f"❌ Firebase 初始化失敗: {e}")
-            return
+    api = DataLoader()
+    token = os.environ.get('FINMIND_TOKEN', '') 
 
-    # 2. 定義完整的市值百強名單
-    # 這份名單會直接作為最終結果發送
-    top_100_all = [
+    top_100_stocks = [
         "2330", "2308", "2454", "2317", "3711", "0050", "2383", "3037", "2345", "2881",
         "2382", "2882", "2412", "2891", "3017", "2303", "7769", "2360", "6669", "2408",
         "2368", "1303", "2885", "2327", "3653", "5274", "3443", "8046", "0056", "2887",
@@ -38,19 +29,52 @@ def run_bot_4_strategy():
         "2376", "5876", "2404", "2618", "1101", "2609"
     ]
 
-    # 3. 強制寫入 Firebase
+    qualified_candidates = []
+
     try:
+        # 抓取今日全市場資料 (我們試著一次拿，如果沒權限再改迴圈)
+        for stock_id in top_100_stocks:
+            try:
+                # 抓取日成交與法人資料
+                df_deal = api.taiwan_stock_daily(stock_id=stock_id, start_date=today_str, token=token)
+                df_chip = api.taiwan_stock_holding_shares_per(stock_id=stock_id, start_date=today_str, token=token)
+                
+                if df_deal.empty or df_chip.empty: continue
+                
+                # 計算籌碼面
+                f_buy = df_chip.iloc[-1]['Foreign_Investors_Buy']
+                i_buy = df_chip.iloc[-1]['Investment_Trust_Buy']
+                total_buy_shares = (f_buy + i_buy) / 1000 # 轉成張數
+                
+                # 計算價格面
+                spread = df_deal.iloc[-1]['Spread']
+                
+                # --- 黃金篩選條件 ---
+                # 1. 今日法人合計買超 > 500 張
+                # 2. 今日股價收紅 (漲幅 > 0)
+                if total_buy_shares > 500 and spread > 0:
+                    qualified_candidates.append(stock_id)
+                    print(f"🔥 符合黃金條件：{stock_id} (買超 {int(total_buy_shares)} 張)")
+            except:
+                continue
+
+        # Firebase 更新
+        fb_config_str = os.environ.get('FIREBASE_CONFIG')
+        if fb_config_str and not firebase_admin._apps:
+            cred = credentials.Certificate(json.loads(fb_config_str))
+            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
+
         if firebase_admin._apps:
             db.reference('stock_alerts/bot_4').set({
-                'bot_name': '🚀 四號機：百強全量測試',
-                'last_update': tw_now.strftime("%Y-%m-%d %H:%M:%S"),
-                'candidates': top_100_all, # 直接推送 100 檔
-                'criteria': '測試模式：無視條件，直接顯示市值百強名單'
+                'bot_name': '🚀 四號機：百強籌碼金選',
+                'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
+                'candidates': qualified_candidates if qualified_candidates else ["今日百強無達標標的"],
+                'criteria': '條件：市值百強、法人合計買超 > 500張 且 股價收紅'
             })
-            print(f"✅ 成功推送 {len(top_100_all)} 檔標的至 Firebase。")
-            print("請檢查手機 App 是否已顯示完整名單。")
+            print(f"🏁 篩選完畢，共 {len(qualified_candidates)} 檔")
+
     except Exception as e:
-        print(f"❌ 寫入 Firebase 時出錯: {e}")
+        print(f"❌ 四號機執行失敗: {e}")
 
 if __name__ == "__main__":
     run_bot_4_strategy()
