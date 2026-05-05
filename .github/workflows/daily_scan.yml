@@ -50,8 +50,7 @@ jobs:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python volume_bot.py
 
-      - name: Cool down 1 minute # 給證交所喘息時間，避免擋 IP
-        run: sleep 60
+    
 
       - name: Run Robot 4 (Institutional - TWSE)
         continue-on-error: true
