@@ -13,72 +13,69 @@ def run_bot_4_strategy():
     today_str = tw_now.strftime("%Y-%m-%d")
     
     if tw_now.weekday() >= 5:
-        print(f"☕ 週末休市，不執行掃描。")
+        print(f"☕ 週末休市。")
         return
 
     print(f"--- 🚀 機器人四號：法人淨買超掃描啟動 ({today_str}) ---")
     
-    url = "https://openapi.twse.com.tw/v1/fund/T86W0"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
-    # [關鍵修正]：先初始化 data 為空列表，防止 NameError
+    # [關鍵修正 1]：在進入任何邏輯前先定義 data，防止 NameError
     data = [] 
-
+    
+    url = "https://openapi.twse.com.tw/v1/fund/T86W0"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
     try:
         response = requests.get(url, headers=headers, timeout=30)
         
+        # [關鍵修正 2]：嚴格檢查回傳內容
         if response.status_code == 200 and response.text.strip():
             try:
                 data = response.json()
-            except Exception:
-                print("❌ 證交所回傳非 JSON 格式。")
-                return
+            except:
+                print("❌ 證交所回傳非 JSON 格式，跳過處理。")
+                data = [] # 確保後續迴圈不報錯
         else:
-            print(f"😴 今日 ({today_str}) 證交所資料未更新。")
-            return
+            print(f"😴 今日資料未更新或請求失敗 (Status: {response.status_code})")
+            data = []
 
-        if not data:
-            return
-
+        # 現在即使 data 為空列表，執行此行也不會報 NameError
         today_net_buy_list = []
-        
-        # 現在執行 for item in data 就不會報 NameError 了
         for item in data:
             try:
-                # 偵測代碼：相容 'Code' 或 '證券代號'
+                # 相容中文與英文 Key
                 code = item.get('Code', item.get('證券代號', '')).strip()
                 if not code: continue
 
-                # 偵測法人買賣超欄位 (相容英/中 Key)
-                f_buy_str = item.get('ForeignInvestorsBuySellDiff', item.get('外資買賣超股數', '0'))
-                i_buy_str = item.get('InvestmentTrustBuySellDiff', item.get('投信買賣超股數', '0'))
+                # 抓取外資與投信買賣超
+                f_buy = str(item.get('ForeignInvestorsBuySellDiff', item.get('外資買賣超股數', '0'))).replace(',', '')
+                i_buy = str(item.get('InvestmentTrustBuySellDiff', item.get('投信買賣超股數', '0'))).replace(',', '')
 
-                f_buy = int(str(f_buy_str).replace(',', ''))
-                i_buy = int(str(i_buy_str).replace(',', ''))
-                
-                if (f_buy + i_buy) > 0:
+                if (int(f_buy) + int(i_buy)) > 0:
                     today_net_buy_list.append(code)
             except:
                 continue
 
-        # Firebase 更新邏輯 (請確保與你的 App 同步)
+        # 3. Firebase 初始化
         fb_config_str = os.environ.get('FIREBASE_CONFIG')
         if fb_config_str and not firebase_admin._apps:
             cred = credentials.Certificate(json.loads(fb_config_str))
             firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
 
         if firebase_admin._apps:
-            # 這裡執行你原本的 update_and_check_continuous 或是直接寫入 Firebase
+            # 寫入 App 顯示區
             db.reference('stock_alerts/bot_4').set({
                 'bot_name': '🚀 機器人四號：法人連買王',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-                'candidates': today_net_buy_list if today_net_buy_list else ["今日法人未同步買進標的"],
+                'candidates': today_net_buy_list if today_net_buy_list else ["今日尚未發現法人合買標的"],
                 'criteria': '籌碼面：外資與投信當日合力買超'
             })
-            print(f"✅ 掃描完成，今日法人買進 {len(today_net_buy_list)} 檔")
+            print(f"✅ 掃描完成，今日標的共 {len(today_net_buy_list)} 檔")
 
     except Exception as e:
-        print(f"❌ 四號機器人執行失敗: {e}")
+        print(f"❌ 四號機器人發生嚴重故障：{e}")
+
+if __name__ == "__main__":
+    run_bot_4_strategy()
 
 if __name__ == "__main__":
     run_bot_4_strategy()
