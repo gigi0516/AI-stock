@@ -31,16 +31,16 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python sentinel_revenue.py
-      - name: Wait 1 minute # 加入緩衝時間
-        run: sleep 60
+      
+        
 
       # 執行三號 (哆啦A夢美股)
       - name: Run Robot 3 (Doraemon US)
         env:
           FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
         run: python us_market_bot.py
-      - name: Wait 1 minute # 加入緩衝時間
-        run: sleep 60
+      
+        
 
       # ... 前面的 1 號機執行 (FinMind) ...
 
