@@ -23,8 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # 這裡必須包含 yfinance 才能跑三號
-          pip install pandas FinMind firebase-admin requests tqdm yfinance
+          pip install pandas FinMind firebase-admin requests tqdm yfinance beautifulsoup4 lxml
 
       # 執行一號 (長線營收)
       - name: Run Robot 1 (Revenue)
