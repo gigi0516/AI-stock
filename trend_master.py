@@ -6,19 +6,16 @@ from FinMind.data import DataLoader
 from datetime import datetime, timedelta, timezone
 
 def get_taiwan_time():
-    # 強制取得台灣時間 (UTC+8)
     return datetime.now(timezone.utc) + timedelta(hours=8)
 
 def run_bot_4_strategy():
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
-    print(f"--- 🚀 機器人四號：FinMind 法人籌碼掃描啟動 ({today_str}) ---")
+    print(f"--- 🚀 機器人四號：法人連買進階過濾啟動 ({today_str}) ---")
 
-    # 1. 初始化 FinMind
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN', '')
 
-    # 市值前 100 名代碼清單
     top_100_stocks = [
         "2330", "2308", "2454", "2317", "3711", "0050", "2383", "3037", "2345", "2881",
         "2382", "2882", "2412", "2891", "3017", "2303", "7769", "2360", "6669", "2408",
@@ -33,31 +30,55 @@ def run_bot_4_strategy():
     ]
 
     qualified_candidates = []
+    # 抓取最近 10 天，確保能取得至少 3 個交易日
+    start_date = (tw_now - timedelta(days=10)).strftime("%Y-%m-%d")
 
     try:
-        # 2. 核心迴圈：逐一檢查標的
         for stock_id in top_100_stocks:
             try:
                 df = api.taiwan_stock_holding_shares_per(
                     stock_id=stock_id,
-                    start_date=today_str,
+                    start_date=start_date,
                     token=token
                 )
                 
-                if not df.empty:
-                    # 判斷外資與投信是否同時買進 (Buy > 0)
-                    # 注意：FinMind 欄位為 Foreign_Investors_Buy 與 Investment_Trust_Buy
-                    f_buy = df.iloc[-1].get('Foreign_Investors_Buy', 0)
-                    i_buy = df.iloc[-1].get('Investment_Trust_Buy', 0)
+                # 必須至少有 3 天的交易資料
+                if df.empty or len(df) < 3:
+                    continue
+                
+                # 確保按日期排序 (最新在最後)
+                df = df.sort_values('date')
+                day_T = df.iloc[-1]   # 今天
+                day_T1 = df.iloc[-2]  # 昨天
+                day_T2 = df.iloc[-3]  # 前天
+
+                # --- 第一關與踢出機制 ---
+                # 今日外資與投信買賣超
+                f_buy_T = day_T.get('Foreign_Investors_Buy', 0)
+                i_buy_T = day_T.get('Investment_Trust_Buy', 0)
+                total_net_T = f_buy_T + i_buy_T
+
+                # 踢出機制：今日合記淨買超必須 > 0
+                if total_net_T <= 0:
+                    continue
+                
+                # 第一關：今日外資「或」投信任一買超 > 0
+                gate_1 = (f_buy_T > 0) or (i_buy_T > 0)
+
+                # --- 第二關：前兩日也要有買超紀錄 ---
+                # 檢查 T-1
+                gate_T1 = (day_T1.get('Foreign_Investors_Buy', 0) > 0) or (day_T1.get('Investment_Trust_Buy', 0) > 0)
+                # 檢查 T-2
+                gate_T2 = (day_T2.get('Foreign_Investors_Buy', 0) > 0) or (day_T2.get('Investment_Trust_Buy', 0) > 0)
+
+                if gate_1 and gate_T1 and gate_T2:
+                    qualified_candidates.append(stock_id)
+                    print(f"✅ 符合連續買超：{stock_id}")
                     
-                    if f_buy > 0 and i_buy > 0:
-                        qualified_candidates.append(stock_id)
-            except:
+            except Exception:
                 continue
 
-        print(f"✅ 掃描完成，符合法人雙買標的共 {len(qualified_candidates)} 檔")
-
-        # 3. Firebase 初始化與寫入
+        # 3. Firebase 更新
         fb_config_str = os.environ.get('FIREBASE_CONFIG')
         if fb_config_str and not firebase_admin._apps:
             cred = credentials.Certificate(json.loads(fb_config_str))
@@ -65,15 +86,15 @@ def run_bot_4_strategy():
 
         if firebase_admin._apps:
             db.reference('stock_alerts/bot_4').set({
-                'bot_name': '🚀 機器人四號：法人連買王',
+                'bot_name': '🚀 機器人四號：法人連買王 (進階過濾)',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-                'candidates': qualified_candidates if qualified_candidates else ["今日法人尚未同步買進"],
-                'criteria': '籌碼面：市值百強中外資與投信當日合力買超'
+                'candidates': qualified_candidates if qualified_candidates else ["今日無符合連續買超標的"],
+                'criteria': '1.今日外資或投信買超且合計>0 2.連續三天皆有法人買超紀錄'
             })
-            print(f"🏁 四號機 Firebase 更新完畢")
+            print(f"🏁 掃描完畢，符合條件共 {len(qualified_candidates)} 檔")
 
     except Exception as e:
-        print(f"❌ 四號機 (FinMind 版) 執行失敗: {e}")
+        print(f"❌ 四號機執行失敗: {e}")
 
 if __name__ == "__main__":
     run_bot_4_strategy()
