@@ -14,8 +14,17 @@ def run_bot_4_strategy():
     print(f"--- 🚀 機器人四號：百強籌碼集中過濾 ({today_str}) ---")
 
     api = DataLoader()
-    token = os.environ.get('FINMIND_TOKEN', '')
+    token = os.environ.get('FINMIND_TOKEN', '') 
+    
+    # --- 測試專用：強行塞入數據 ---
+    test_candidates = ["2330", "2317", "2454"] # 測試台積電、鴻海、聯發科
 
+    db.reference('stock_alerts/bot_4').set({
+        'bot_name': '🚀 四號機：測試模式',
+        'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
+        'candidates': test_candidates, # 這裡一定會有資料
+        'criteria': '測試模式：強行推送百強指標'
+     })
     top_100_stocks = [
         "2330", "2308", "2454", "2317", "3711", "0050", "2383", "3037", "2345", "2881",
         "2382", "2882", "2412", "2891", "3017", "2303", "7769", "2360", "6669", "2408",
