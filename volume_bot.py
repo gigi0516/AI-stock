@@ -20,7 +20,8 @@ def run_bot_2_strategy():
     print(f"--- 🚀 機器人二號：開始全市場量能爆發掃描 ({today_str}) ---")
     
     # 2. 抓取今日成交資料
-    url = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
+    
+    url = "https://openapi.twse.com.tw/v1/fund/T86W0"
     headers = {'User-Agent': 'Mozilla/5.0'}
     
     try:
