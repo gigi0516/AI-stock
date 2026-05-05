@@ -1,8 +1,8 @@
-import requests
 import os
 import json
 import firebase_admin
 from firebase_admin import credentials, db
+from FinMind.data import DataLoader
 from datetime import datetime, timedelta, timezone
 
 def get_taiwan_time():
@@ -11,87 +11,76 @@ def get_taiwan_time():
 def run_bot_2_strategy():
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
-    
-    if tw_now.weekday() >= 5:
-        print(f"☕ 台灣時間 {today_str} 是週末，機器人放假去！")
-        return
+    print(f"--- 🚀 機器人二號：FinMind 量能爆發掃描啟動 ({today_str}) ---")
 
-    print(f"--- 🚀 機器人二號：開始全市場量能爆發掃描 ({today_str}) ---")
-    
-    # [關鍵修正] 使用正確的 API 網址：全市場收盤行情
-    url = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    api = DataLoader()
+    token = os.environ.get('FINMIND_TOKEN', '')
+
+    # 抓取最近 10 天的資料 (確保能抓到兩個完整的交易日，避開週末)
+    start_date = (tw_now - timedelta(days=10)).strftime("%Y-%m-%d")
     
     try:
-        response = requests.get(url, headers=headers, timeout=60) # 檔案大，增加超時時間
+        # 1. 抓取全市場日成交資料
+        df = api.taiwan_stock_daily_all(
+            start_date=start_date,
+            token=token
+        )
         
-        # [加強保護] 攔截非 JSON 或空白內容
-        if response.status_code != 200 or not response.text.strip():
-            print(f"😴 今日 ({today_str}) 證交所尚未產出收盤資料。")
+        if df.empty:
+            print("😴 FinMind 尚未更新今日資料。")
+            return
+
+        # 2. 找出最近的兩個交易日
+        available_dates = sorted(df['date'].unique(), reverse=True)
+        if len(available_dates) < 2:
+            print("❌ 交易日資料不足，無法比對。")
             return
             
-        try:
-            data = response.json()
-        except:
-            print("❌ 證交所資料格式錯誤，無法解析 JSON。")
-            return
+        latest_date = available_dates[0]
+        prev_date = available_dates[1]
+        print(f"📊 比對基準：今日({latest_date}) vs 昨日({prev_date})")
 
-        # Firebase 初始化
-        fb_config = os.environ.get('FIREBASE_CONFIG')
-        if not fb_config: return
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(json.loads(fb_config))
-            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
-        
-        history_ref = db.reference('bot_2_history/last_volume')
-        yesterday_vol_map = history_ref.get() or {}
+        today_df = df[df['date'] == latest_date]
+        prev_df = df[df['date'] == prev_date]
 
-        today_vol_map = {}
         potential_candidates = []
 
-        # 5. 開始比對爆量邏輯
-        for item in data:
-            try:
-                # [欄位對齊] 根據 STOCK_DAY_ALL 的正確 Key 名稱
-                code = item.get('Code', item.get('證券代號'))
-                name = item.get('Name', item.get('證券名稱', '')).strip()
-                if not code: continue
+        # 3. 比對爆量邏輯
+        # 將昨日量轉為字典方便查詢
+        prev_vol_map = dict(zip(prev_df['stock_id'], prev_df['Trading_Volume']))
 
-                # 取得今日量 (STOCK_DAY_ALL 的單位是股，除以 1000 變張)
-                raw_vol = str(item.get('TradeVolume', '0')).replace(',', '')
-                today_vol = int(raw_vol) // 1000 
-                
-                # 紀錄今天量，準備給明天用
-                today_vol_map[code] = today_vol
-                
-                yesterday_vol = yesterday_vol_map.get(code, 0)
+        for _, row in today_df.iterrows():
+            stock_id = row['stock_id']
+            stock_name = row.get('stock_name', '')
+            today_vol = row['Trading_Volume']
+            yesterday_vol = prev_vol_map.get(stock_id, 0)
+            
+            # 轉換為張數 (FinMind 單位通常是股)
+            today_v_shares = today_vol / 1000
+            yesterday_v_shares = yesterday_vol / 1000
 
-                # 取得漲跌 (Change)
-                change_str = str(item.get('Change', '0')).replace(',', '')
-                change = float(change_str)
-                
-                # 篩選條件：今日 > 2000張、量增2倍、漲幅 > 0
-                if today_vol > 2000 and yesterday_vol > 0:
-                    if today_vol > (yesterday_vol * 2) and change > 0:
-                        potential_candidates.append(f"{code} {name}")
-                        print(f"🔥 爆量發現: {code} {name} (今:{today_vol} / 昨:{yesterday_vol})")
-            except:
-                continue
+            # 篩選條件：今日 > 2000張、量增2倍、股價收紅 (Spread > 0)
+            if today_v_shares > 2000 and yesterday_v_shares > 0:
+                if today_v_shares > (yesterday_v_shares * 2) and row['Spread'] > 0:
+                    potential_candidates.append(f"{stock_id} {stock_name}")
+                    print(f"🔥 爆量發現: {stock_id} (今:{int(today_v_shares)} / 昨:{int(yesterday_v_shares)})")
 
-        # 6. 更新 Firebase
+        # 4. Firebase 更新
+        fb_config = os.environ.get('FIREBASE_CONFIG')
+        if fb_config and not firebase_admin._apps:
+            cred = credentials.Certificate(json.loads(fb_config))
+            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
+
         db.reference('stock_alerts/bot_2').set({
             'bot_name': '🚀 機器人二號：短線量能爆發',
             'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-            'candidates': potential_candidates if potential_candidates else ["今日尚無量能翻倍標的"],
-            'criteria': '短線爆發：成交量 > 昨日 2 倍 且 股價收紅'
+            'candidates': potential_candidates if potential_candidates else ["今日尚無爆量標的"],
+            'criteria': f'比對日期：{latest_date} | 條件：成交量 > 昨日 2 倍 且 收紅'
         })
-
-        # 7. 儲存紀錄
-        history_ref.set(today_vol_map)
-        print(f"🏁 二號機器人掃描完成，發現 {len(potential_candidates)} 檔。")
+        print(f"🏁 二號機更新完成，發現 {len(potential_candidates)} 檔")
 
     except Exception as e:
-        print(f"❌ 二號機器人執行失敗: {e}")
+        print(f"❌ 二號機 (FinMind 版) 執行失敗: {e}")
 
 if __name__ == "__main__":
     run_bot_2_strategy()
