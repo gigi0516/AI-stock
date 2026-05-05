@@ -36,16 +36,30 @@ def run_bot_4_strategy():
             print(f"😴 今日 ({today_str}) 無法人資料。")
             return
 
-        # 4. 篩選邏輯 (保持不變)
+        # 4. 篩選邏輯 (修正欄位名稱與單位)
         today_net_buy_list = []
         for item in data:
             try:
-                # 安全取得欄位內容，防止 Key 缺失
-                foreign = int(item.get('ForeignInvestorsBuySellDiff', '0').replace(',', ''))
-                sitc = int(item.get('InvestmentTrustBuySellDiff', '0').replace(',', ''))
+                # 取得股票代碼
+                code = item.get('Code', item.get('證券代號', ''))
+                if not code: continue
+
+                # [關鍵修正]：證交所 OpenAPI 的欄位名稱常有變化，使用多重 get 確保抓到數據
+                # 外資買賣超：有些版本是 'ForeignInvestorsBuySellDiff'，有些直接用中文
+                foreign_str = item.get('ForeignInvestorsBuySellDiff', item.get('外資買賣超股數', '0'))
+                # 投信買賣超
+                sitc_str = item.get('InvestmentTrustBuySellDiff', item.get('投信買賣超股數', '0'))
+
+                # 去除逗號並轉為整數
+                foreign = int(str(foreign_str).replace(',', ''))
+                sitc = int(str(sitc_str).replace(',', ''))
+                
+                # 只要外資與投信合力買超（大於 0）就納入今日名單
                 if (foreign + sitc) > 0:
-                    today_net_buy_list.append(item.get('Code'))
-            except:
+                    today_net_buy_list.append(code)
+                    
+            except Exception as e:
+                # 萬一單一股票資料解析錯誤，不中斷整體運行
                 continue
 
         print(f"✅ 今日法人有買進標的共 {len(today_net_buy_list)} 檔")
