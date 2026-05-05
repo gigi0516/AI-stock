@@ -12,28 +12,31 @@ def run_bot_3_strategy():
     print("--- 🚀 機器人三號：哆啦A夢美股情報局啟動 ---")
     
     try:
-        # 1. 抓取數據 (必須先下載數據，後面的判斷才有用！)
-        # ^VIX 是恐慌指數, ^IXIC 是那斯達克
-        data = yf.download(["^VIX", "^IXIC"], period="2d", interval="1d")
+        # 1. 抓取數據 (下載最近 5 天以確保跨過週末)
+        tickers = ["^VIX", "^IXIC"]
+        data = yf.download(tickers, period="5d", interval="1d")
         
-        # --- 段落：美股休市判斷 (下載完立刻檢查) ---
         if data.empty or len(data) < 2:
-            print("💡 美股目前處於休市狀態或資料尚未更新，哆啦A夢先去睡午覺了...")
+            print("💡 資料庫目前沒東西，哆啦A夢先去睡午覺了...")
             return
 
-        # 額外保險：檢查最新資料日期是否太舊 (超過兩天沒更新)
-        last_trade_date = data.index[-1].date()
-        if last_trade_date < (datetime.now(timezone.utc) - timedelta(days=2)).date():
-            print(f"📡 最後交易日為 {last_trade_date}，美股可能在放長假。")
+        # --- 核心修正：處理 MultiIndex 並過濾 NaN ---
+        # 使用 .dropna() 確保我們只拿有數值的日期
+        close_prices = data['Close'].dropna()
+        
+        if len(close_prices) < 2:
+            print("⚠️ 數值不足，無法計算漲跌。")
             return
 
-        # 2. 計算數值
-        vix_val = round(data['Close']['^VIX'].iloc[-1], 2)
-        nasdaq_now = data['Close']['^IXIC'].iloc[-1]
-        nasdaq_prev = data['Close']['^IXIC'].iloc[-2]
+        # 2. 取得最新與次新資料
+        # iloc[-1] 是最新, iloc[-2] 是前一天
+        vix_val = round(float(close_prices['^VIX'].iloc[-1]), 2)
+        nasdaq_now = float(close_prices['^IXIC'].iloc[-1])
+        nasdaq_prev = float(close_prices['^IXIC'].iloc[-2])
+        
         nasdaq_chg = round(((nasdaq_now - nasdaq_prev) / nasdaq_prev) * 100, 2)
 
-        # 3. 哆啦A夢情境邏輯
+        # 3. 哆啦A夢情境邏輯 (保持不變)
         header = "🔵【大雄！我從未來帶回美股消息了！】\n"
         
         if vix_val < 20:
@@ -45,13 +48,12 @@ def run_bot_3_strategy():
         elif 30 <= vix_val < 40:
             vix_mood = f"😰 糟糕！VIX 衝到 {vix_val}，市場很不穩定！"
             vix_advice = "哇啊！胖虎拿著棒球棍衝過來了啦！快去搭『時光機』回防，這時候很危險的！"
-        else: # 40 以上
+        else:
             vix_mood = f"😱 救命啊！VIX 爆表到 {vix_val}，這是極度恐慌狀態！"
             vix_advice = "大雄！世界末日啦！快披上『避難斗篷』躲進書桌抽屜！不管看到什麼都不要動！"
 
         market_summary = f"那斯達克漲跌：{nasdaq_chg}%"
         
-        # 結合 Nasdaq 表現補充評語
         if nasdaq_chg > 1.2 and vix_val < 30:
             final_advice = f"{vix_advice} 而且那指噴出了，明天台股電子股可能會有好表現喔！"
         elif nasdaq_chg < -1.5:
@@ -75,7 +77,7 @@ def run_bot_3_strategy():
             'candidates': [final_report],
             'criteria': f'VIX分級：10-20穩定/20-30不穩/30-40焦慮/40+恐慌'
         })
-        print("✅ 哆啦A夢專業版回報成功！")
+        print(f"✅ 哆啦A夢報告成功：VIX={vix_val}, Nasdaq={nasdaq_chg}%")
 
     except Exception as e:
         print(f"❌ 三號機器人發生故障：{e}")
