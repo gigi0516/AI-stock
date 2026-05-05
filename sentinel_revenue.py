@@ -15,9 +15,10 @@ def run_sentinel_strategy():
 
     # 1. 初始化 FinMind
     api = DataLoader()
+    api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN', '')
     if token:
-        api.login_token(token)
+        api.login(token=token)
 
     # 【自定義監控清單】在此輸入你的持股代碼
     my_stocks = ["2330", "2317", "2454", "0050", "0056"] 
