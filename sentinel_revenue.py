@@ -20,7 +20,7 @@ def run_sentinel_strategy():
 
     print(f"--- 🚀 機器人一號：OpenAPI 營收監控啟動 ({today_str}) ---")
 
-    # 使用 OpenAPI：申報當月營收彙總表 (TWE044U)
+    # 這是「當月營收彙總表」- 才是長線營收王需要的資料
     url = "https://openapi.twse.com.tw/v1/statistics/TWE044U"
     
     headers = {
