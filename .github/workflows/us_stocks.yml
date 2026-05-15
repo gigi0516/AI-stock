@@ -1,8 +1,8 @@
 name: US Stock Bot (3)
 
 on:
-  schedule:
-    - cron: '33 0 * * 2-6' # 台灣時間 08:30 (週二至週六)
+  repository_dispatch:
+    types: [trigger_us_bots] # ⚠️ 換成美股專用暗號，避免跟台股搞混
   workflow_dispatch:
 
 jobs:
