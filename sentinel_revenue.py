@@ -14,13 +14,19 @@ def run_sentinel_strategy():
     print(f"--- 🚀 機器人一號：持股營收哨兵啟動 ({tw_now.strftime('%Y-%m-%d %H:%M:%S')}) ---")
 
     api = DataLoader()
-    token = os.environ.get('FINMIND_TOKEN', '')
     
-    # 1. 登入 (只需在迴圈外登入一次)
-    if token:
-        api.login_by_token(api_token=token)
+    # --- 修正：自動清除 Token 可能含有的引號或空格 ---
+    raw_token = os.environ.get('FINMIND_TOKEN', '')
+    token = raw_token.strip().replace("'", "").replace('"', "")
+    
+    if not token:
+        print("❌ 錯誤：找不到 FINMIND_TOKEN，請檢查 GitHub Secrets 設定")
+        return
 
-    # 2. 設定清單與參數
+    # 登入
+    api.login_by_token(api_token=token)
+    # --------------------------------------------
+
     my_stocks = ["2330", "2337", "2454", "2308", "2317", "7794", "2072"]
     start_date = (tw_now - timedelta(days=180)).strftime("%Y-%m-%d")
     qualified_candidates = []
