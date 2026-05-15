@@ -2,7 +2,7 @@ name: TW Stock Bots (1, 2, 4)
 
 on:
   schedule:
-    - cron: '12 9 * * 1-5' # 台灣時間 17:00
+    - cron: '43 10 * * 1-5' # 台灣時間 17:00
   workflow_dispatch:
 
 jobs:
