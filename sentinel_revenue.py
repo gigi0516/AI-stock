@@ -40,27 +40,22 @@ def run_sentinel_strategy():
             )
             
             if df.empty or len(df) < 4:
-                print(f"⚠️ {stock_id}：資料不足或為空 (抓到 {len(df)} 筆)")
+                print(f"⚠️ {stock_id}：資料不足 (抓到 {len(df)} 筆)")
                 continue
             
-            # 【診斷點】印出欄位名稱，看看真正的名稱是什麼
-            print(f"📊 {stock_id} 抓到的欄位有: {df.columns.tolist()}")
-            
+            # --- 【核心修正】手動計算年增率 ---
+            # 如果 API 沒給百分比，我們就用 (當月營收 - 去年同月) / 去年同月 * 100
+            if 'revenue_year_growth_percent' not in df.columns:
+                df['revenue_year_growth_percent'] = (
+                    (df['revenue'] - df['revenue_year']) / df['revenue_year'] * 100
+                )
+            # -------------------------------
+
             df = df.sort_values('date')
             recent_4 = df.tail(4)
             
-            # 【相容性處理】檢查年增率欄位的正確名稱
-            # 有些版本是 'revenue_year_growth_percent'，有些是 'revenue_year_growth'
-            target_col = 'revenue_year_growth_percent'
-            if target_col not in df.columns:
-                if 'revenue_year_growth' in df.columns:
-                    target_col = 'revenue_year_growth'
-                else:
-                    # 如果都找不到，就印出錯誤並跳過
-                    print(f"❌ {stock_id} 找不到年增率欄位")
-                    continue
-
-            yoy_list = recent_4[target_col].tolist()
+            # 診斷點：現在這裡絕對會有數字了！
+            yoy_list = [round(x, 2) for x in recent_4['revenue_year_growth_percent'].tolist()]
             print(f"🔍 檢查 {stock_id} 最近 4 月 YoY: {yoy_list}")
 
             is_qualified = True
