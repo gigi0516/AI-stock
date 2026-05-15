@@ -1,9 +1,9 @@
 name: TW Stock Bots (1, 2, 4)
 
 on:
-  schedule:
-    - cron: '1 11 * * 1-5' # 台灣時間 19:01 (完美避開塞車)
-  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_tw_bots] # 這是我們自訂的秘密暗號
+  workflow_dispatch:         # 保留手動按鈕，方便妳隨時測試
 
 jobs:
   run-tw-bots:
