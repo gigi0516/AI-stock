@@ -19,7 +19,7 @@ def run_bot_4_strategy():
     if token:
         api.login_by_token(api_token=token)
 
-    # 市值百強名單 (節錄部分示範，請維持妳原本的長名單)
+    # 市值百強名單
     top_100_stocks = ["2330", "2308", "2454", "2317", "3711", "2383", "3037", "2881", "2382", "2882", "2412", "2891", "3017", "2303", "2360", "6669", "2408", "2368", "2885", "2327", "2887", "2886", "3665", "6505", "2884", "6223", "8299", "2880", "3231", "2603", "2344", "2890", "2357", "2449", "3045", "2892", "4958", "2301", "2059", "1216", "2883", "6515", "5880", "6274", "4904", "2395", "3008", "3661", "3529", "2313", "1301", "6488", "2337", "1326", "2002", "1590", "5347", "1519", "3533", "3189", "2379", "2207", "3036", "3081", "3034", "3044", "6446", "2801", "3105", "6770", "2912", "4938", "3481", "2615", "1802", "3293", "5871", "6789", "2376", "5876", "2404", "2618", "1101", "2609"]
 
     qualified_candidates = []
@@ -33,13 +33,19 @@ def run_bot_4_strategy():
                 start_date=start_date
             )
             
-            if df_chip.empty:
+            if df_chip is None or df_chip.empty:
                 continue
                 
+            # ✨【修正核心】FinMind 原始資料只有 buy 和 sell，必須手動算出 net_buy (買超 = 買進 - 賣出)
+            df_chip['net_buy'] = df_chip['buy'] - df_chip['sell']
+            
             # 1. 篩選法人：只要 外資(Foreign_Investor) 和 投信(Investment_Trust)
             # 排除自營商避免避險單干擾
             target = ['Foreign_Investor', 'Investment_Trust']
             df_filter = df_chip[df_chip['name'].isin(target)]
+            
+            if df_filter.empty:
+                continue
             
             # 2. 按日期加總：把同一天的外資跟投信買賣超加起來
             daily_sum = df_filter.groupby('date')['net_buy'].sum().reset_index()
@@ -80,5 +86,7 @@ def run_bot_4_strategy():
     except Exception as e:
         print(f"❌ Firebase 寫入失敗: {e}")
 
+if __name__ == "__main__":
+    run_bot_4_strategy()
 if __name__ == "__main__":
     run_bot_4_strategy()
