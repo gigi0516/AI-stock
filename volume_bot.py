@@ -62,7 +62,8 @@ def run_bot_2_strategy():
                 today_vol = today_data['Trading_Volume'] / 1000
                 prev_vol = prev_data['Trading_Volume'] / 1000
                 
-                if today_vol > 2000 and today_vol > (prev_vol * 2) and today_data['Spread'] > 0:
+                # 將 2 改為 1.3
+                if today_vol > 2000 and today_vol > (prev_vol * 1.3) and today_data['Spread'] > 0:
                     stock_name = today_data.get('stock_name', stock_id)
                     potential_candidates.append(f"{stock_id} {stock_name}")
                     print(f"🔥 發現爆量：{stock_id} {stock_name}")
