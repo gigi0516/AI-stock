@@ -48,8 +48,7 @@ def run_sentinel_strategy():
                 status = "🔥" if is_qualified else "⚪"
                 name = df.iloc[-1].get('stock_name', stock_id)
                 qualified_candidates.append(f"{status} {stock_id} {name}")
-            except:
-                continue
+            except Exception as e: print(e)
 
         # Firebase 寫入
         fb_config = os.environ.get('FIREBASE_CONFIG')
