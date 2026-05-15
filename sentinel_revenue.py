@@ -34,24 +34,35 @@ def run_sentinel_strategy():
     # 3. 核心篩選迴圈 (注意縮排)
     for stock_id in my_stocks:
         try:
-            # 抓取資料
             df = api.taiwan_stock_month_revenue(
                 stock_id=stock_id,
                 start_date=start_date
             )
             
             if df.empty or len(df) < 4:
-                print(f"⚠️ {stock_id}：資料不足或為空")
+                print(f"⚠️ {stock_id}：資料不足或為空 (抓到 {len(df)} 筆)")
                 continue
+            
+            # 【診斷點】印出欄位名稱，看看真正的名稱是什麼
+            print(f"📊 {stock_id} 抓到的欄位有: {df.columns.tolist()}")
             
             df = df.sort_values('date')
             recent_4 = df.tail(4)
             
-            # 診斷數據
-            yoy_list = recent_4['revenue_year_growth_percent'].tolist()
+            # 【相容性處理】檢查年增率欄位的正確名稱
+            # 有些版本是 'revenue_year_growth_percent'，有些是 'revenue_year_growth'
+            target_col = 'revenue_year_growth_percent'
+            if target_col not in df.columns:
+                if 'revenue_year_growth' in df.columns:
+                    target_col = 'revenue_year_growth'
+                else:
+                    # 如果都找不到，就印出錯誤並跳過
+                    print(f"❌ {stock_id} 找不到年增率欄位")
+                    continue
+
+            yoy_list = recent_4[target_col].tolist()
             print(f"🔍 檢查 {stock_id} 最近 4 月 YoY: {yoy_list}")
 
-            # 判斷條件：連續 4 個月年增率 > 1%
             is_qualified = True
             for yoy in yoy_list:
                 if yoy < 1:
@@ -65,26 +76,5 @@ def run_sentinel_strategy():
 
         except Exception as e:
             print(f"❌ {stock_id} 發生錯誤: {e}")
-
-    # 4. Firebase 寫入 (在迴圈結束後執行)
-    try:
-        fb_config_str = os.environ.get('FIREBASE_CONFIG')
-        if fb_config_str and not firebase_admin._apps:
-            cred = credentials.Certificate(json.loads(fb_config_str))
-            firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
-
-        if firebase_admin._apps:
-            db.reference('stock_alerts/bot_1').set({
-                'bot_name': '🚀 機器人一號：持股營收哨兵',
-                'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
-                'candidates': qualified_candidates if qualified_candidates else ["監控標的暫無雙增"],
-                'criteria': '監控持股：連續 4 月營收年增 > 1%'
-            })
-            print(f"🏁 Firebase 資料寫入成功")
-    except Exception as fb_e:
-        print(f"❌ Firebase 錯誤: {fb_e}")
-
-    print(f"🏁 一號機執行完畢")
-
 if __name__ == "__main__":
     run_sentinel_strategy()
