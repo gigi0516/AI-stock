@@ -32,6 +32,10 @@ def run_sentinel_strategy():
     qualified_candidates = []
     
     # 3. 核心篩選迴圈 (注意縮排)
+    # 1. 抓取更長的時間範圍（改為 550 天），這樣才有去年的資料可以比
+    start_date = (tw_now - timedelta(days=550)).strftime("%Y-%m-%d")
+    qualified_candidates = []
+    
     for stock_id in my_stocks:
         try:
             df = api.taiwan_stock_month_revenue(
@@ -39,25 +43,28 @@ def run_sentinel_strategy():
                 start_date=start_date
             )
             
-            if df.empty or len(df) < 4:
-                print(f"⚠️ {stock_id}：資料不足 (抓到 {len(df)} 筆)")
+            if df.empty or len(df) < 13: # 至少要有 13 筆才能跟去年同月比
+                print(f"⚠️ {stock_id}：歷史資料不足以計算 YoY (需要至少 13 個月)")
                 continue
             
-            # --- 【核心修正】手動計算年增率 ---
-            # 如果 API 沒給百分比，我們就用 (當月營收 - 去年同月) / 去年同月 * 100
-            if 'revenue_year_growth_percent' not in df.columns:
-                df['revenue_year_growth_percent'] = (
-                    (df['revenue'] - df['revenue_year']) / df['revenue_year'] * 100
-                )
+            df = df.sort_values('date')
+            
+            # --- 【核心修正】正確計算年增率 ---
+            # 使用 pct_change(periods=12) 自動幫你計算跟 12 筆資料前（即去年同月）的變動率
+            df['revenue_year_growth_percent'] = df['revenue'].pct_change(periods=12) * 100
             # -------------------------------
 
-            df = df.sort_values('date')
-            recent_4 = df.tail(4)
+            # 拿最後 4 個月來判定
+            recent_4 = df.dropna(subset=['revenue_year_growth_percent']).tail(4)
             
-            # 診斷點：現在這裡絕對會有數字了！
-            yoy_list = [round(x, 2) for x in recent_4['revenue_year_growth_percent'].tolist()]
-            print(f"🔍 檢查 {stock_id} 最近 4 月 YoY: {yoy_list}")
+            if len(recent_4) < 4:
+                print(f"⚠️ {stock_id}：計算後可用的最近資料不足 4 筆")
+                continue
 
+            yoy_list = [round(x, 2) for x in recent_4['revenue_year_growth_percent'].tolist()]
+            print(f"🔍 檢查 {stock_id} 最近 4 月正確 YoY: {yoy_list}")
+
+            # 判斷條件：連續 4 個月年增率 > 1%
             is_qualified = True
             for yoy in yoy_list:
                 if yoy < 1:
