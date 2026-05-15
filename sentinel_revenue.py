@@ -5,7 +5,29 @@ from firebase_admin import credentials, db
 from FinMind.data import DataLoader
 from datetime import datetime, timedelta, timezone
 
-for stock_id in my_stocks:
+
+def run_sentinel_strategy():
+    tw_now = get_taiwan_time()
+    print(f"--- 🚀 機器人一號：持股營收哨兵啟動 ({tw_now.strftime('%Y-%m-%d')}) ---")
+
+    api = DataLoader()
+    token = os.environ.get('FINMIND_TOKEN', '')
+
+    # --- 這裡最重要！要把清單拿回來 ---
+    # 確保這一行在 for 迴圈之前
+    my_stocks = ["2330", "2337", "2454", "2308", "2317", "7794", "2072"]
+            start_date = (tw_now - timedelta(days=180)).strftime("%Y-%m-%d")
+    qualified_candidates = []
+    
+    # 開始跑迴圈
+    for stock_id in my_stocks:
+        try:
+            df = api.taiwan_stock_month_revenue(
+                stock_id=stock_id,
+                start_date=start_date,
+                token=token
+            )
+     for stock_id in my_stocks:
             try:
                 df = api.taiwan_stock_month_revenue(
                     stock_id=stock_id,
