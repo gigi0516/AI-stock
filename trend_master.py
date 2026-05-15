@@ -24,7 +24,11 @@ def run_bot_4_strategy():
         for stock_id in top_100_stocks:
             try:
                 # 抓取法人資料
-                df_chip = api.taiwan_stock_holding_shares_per(stock_id=stock_id, start_date=start_date, token=token)
+                df_chip = api.taiwan_stock_institutional_investors(
+    stock_id=stock_id, 
+    start_date=start_date, 
+    token=token
+)
                 if df_chip.empty or len(df_chip) < 2: continue
                 
                 df_chip = df_chip.sort_values('date')
