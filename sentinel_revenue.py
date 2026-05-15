@@ -17,7 +17,7 @@ def run_sentinel_strategy():
     token = os.environ.get('FINMIND_TOKEN', '')
 
     # 設定你的監控清單
-    my_stocks = ["2330", "2317", "2454", "0050", "0056"] 
+    my_stocks = ["2330", "2337", "2454", "2308", "2317","7794","2072"] 
     start_date = (tw_now - timedelta(days=180)).strftime("%Y-%m-%d")
     
     qualified_candidates = []
@@ -41,7 +41,7 @@ def run_sentinel_strategy():
                 # 判斷連續 4 月雙增
                 is_qualified = True
                 for _, row in recent_4.iterrows():
-                    if row.get('revenue_month_growth_percent', 0) < 1 or row.get('revenue_year_growth_percent', 0) < 1:
+                    if row.get('revenue_year_growth_percent', 0) < 1:
                         is_qualified = False
                         break
                 
