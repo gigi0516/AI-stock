@@ -1,0 +1,23 @@
+name: US Stock Bot (3)
+
+on:
+  schedule:
+    - cron: '30 0 * * 2-6' # 台灣時間 08:30 (週二至週六)
+  workflow_dispatch:
+
+jobs:
+  run-us-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install pandas firebase-admin yfinance requests
+
+      - name: Run Robot 3 (Doraemon US)
+        env:
+          FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+        run: python us_market_bot.py
