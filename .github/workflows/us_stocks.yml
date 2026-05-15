@@ -2,7 +2,7 @@ name: US Stock Bot (3)
 
 on:
   schedule:
-    - cron: '30 0 * * 2-6' # 台灣時間 08:30 (週二至週六)
+    - cron: '33 0 * * 2-6' # 台灣時間 08:30 (週二至週六)
   workflow_dispatch:
 
 jobs:
