@@ -11,7 +11,7 @@ def get_taiwan_time():
 
 def run_sentinel_strategy():
     tw_now = get_taiwan_time()
-    print(f"--- 🚀 機器人一號：持股營收哨兵啟動 ({tw_now.strftime('%Y-%m-%d %H:%M:%S')}) ---")
+    print(f"--- 機器人一號：預言日記本 ({tw_now.strftime('%Y-%m-%d %H:%M:%S')}) ---")
 
     # 1. 初始化環境與登入
     api = DataLoader()
@@ -79,7 +79,7 @@ def run_sentinel_strategy():
 
         if firebase_admin._apps:
             db.reference('stock_alerts/bot_1').set({
-                'bot_name': '🚀 機器人一號：持股營收哨兵',
+                'bot_name': '機器人一號：預言日記本',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
                 'candidates': qualified_candidates if qualified_candidates else ["暫無雙增標的"],
                 'criteria': '監控持股：連續 4 月營收年增 > 1%'
