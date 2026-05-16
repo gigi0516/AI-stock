@@ -9,7 +9,7 @@ def get_taiwan_time():
     return datetime.now(timezone.utc) + timedelta(hours=8)
 
 def run_bot_3_strategy():
-    print("--- 🚀 機器人三號：哆啦A夢美股情報局啟動 ---")
+    print("---  機器人三號：如果電話亭 ---")
     
     try:
         # 1. 抓取數據 (下載最近 5 天以確保跨過週末)
@@ -72,7 +72,7 @@ def run_bot_3_strategy():
             firebase_admin.initialize_app(cred, {'databaseURL': 'https://stock-ai-a50cb-default-rtdb.firebaseio.com/'})
         
         db.reference('stock_alerts/bot_3').set({
-            'bot_name': '🤖 機器人三號：小叮噹觀測員',
+            'bot_name': ' 機器人三號：如果電話亭',
             'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
             'candidates': [final_report],
             'criteria': f'VIX分級：10-20穩定/20-30不穩/30-40焦慮/40+恐慌'
