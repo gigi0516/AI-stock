@@ -10,7 +10,7 @@ def get_taiwan_time():
 
 def run_bot_4_strategy():
     tw_now = get_taiwan_time()
-    print(f"--- 🚀 四號機：權值連買王啟動 ({tw_now.strftime('%Y-%m-%d %H:%M:%S')}) ---")
+    print(f"---  四號機：追蹤徽章({tw_now.strftime('%Y-%m-%d %H:%M:%S')}) ---")
     
     api = DataLoader()
     raw_token = os.environ.get('FINMIND_TOKEN', '')
@@ -77,7 +77,7 @@ def run_bot_4_strategy():
 
         if firebase_admin._apps:
             db.reference('stock_alerts/bot_4').set({
-                'bot_name': '🚀 四號機：權值連買王',
+                'bot_name': '四號機：追蹤徽章',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
                 'candidates': qualified_candidates if qualified_candidates else ["今日無權值連買標的"],
                 'criteria': '條件：市值百強、外資+投信合計連續兩日買超'
