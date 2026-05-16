@@ -13,7 +13,7 @@ def get_taiwan_time():
 def run_bot_2_strategy():
     tw_now = get_taiwan_time()
     today_str = tw_now.strftime("%Y-%m-%d")
-    print(f"--- 🚀 機器人二號：FinMind 免費相容版啟動 ({today_str}) ---")
+    print(f"--- 機器人二號：FinMind 免費相容版啟動 ({today_str}) ---")
 
     api = DataLoader()
     token = os.environ.get('FINMIND_TOKEN', '') 
@@ -79,7 +79,7 @@ def run_bot_2_strategy():
 
         if firebase_admin._apps:
             db.reference('stock_alerts/bot_2').set({
-                'bot_name': '🚀 機器人二號：短線量能爆發',
+                'bot_name': '機器人二號：放大燈',
                 'last_update': get_taiwan_time().strftime("%Y-%m-%d %H:%M:%S"),
                 'candidates': potential_candidates if potential_candidates else ["今日百強範圍內暫無爆量標的"],
                 'criteria': '條件：市值百強、成交量 > 昨日 2 倍且收紅'
